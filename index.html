@@ -125,12 +125,16 @@
             }
 
             const validateSubtaskConstraints = (parentTask, newDueDate, newPriority) => {
+                if (!parentTask) {
+                    console.log("Erro: parentTask é undefined");
+                    return true; // Permitir se não houver pai válido (nível 1)
+                }
                 if (newDueDate && parentTask.dueDate && newDueDate > parentTask.dueDate) {
                     document.getElementById('error').textContent = "Data da subtarefa não pode ser posterior à da tarefa!";
                     console.log("Erro: Data da subtarefa posterior à tarefa");
                     return false;
                 }
-                if (newPriority > parentTask.priority) {
+                if (parentTask.priority !== undefined && newPriority > parentTask.priority) {
                     document.getElementById('error').textContent = "Prioridade da subtarefa não pode ser maior que a da tarefa!";
                     console.log("Erro: Prioridade da subtarefa maior que a tarefa");
                     return false;
@@ -178,6 +182,7 @@
                         console.error("Tarefa pai não encontrada para key:", key);
                         return;
                     }
+
                     const parentTask = path ? getParentTask(task, path) : task;
                     if (!validateSubtaskConstraints(parentTask, dueDate, priority)) return;
 
@@ -195,14 +200,12 @@
                         task.subtasks = task.subtasks || [];
                         task.subtasks.push(newSubtask);
                     } else {
-                        // Níveis 2+: Atualizar o subtasks do nível anterior
+                        // Níveis 2+: Adicionar ao subtasks do nível anterior
                         const parts = path.split('/').filter(p => p !== 'subtasks');
                         let current = task;
-                        for (let i = 0; i < parts.length - 1; i++) {
-                            current = (current.subtasks || [])[parseInt(parts[i])];
+                        for (const index of parts) {
+                            current = (current.subtasks || [])[parseInt(index)] || (current.subtasks = current.subtasks || [], current.subtasks[parseInt(index)] = {});
                         }
-                        const targetIndex = parseInt(parts[parts.length - 1]);
-                        current = (current.subtasks || [])[targetIndex];
                         current.subtasks = current.subtasks || [];
                         current.subtasks.push(newSubtask);
                     }
@@ -490,6 +493,7 @@
             let current = task;
             for (const index of parts) {
                 current = (current.subtasks || [])[parseInt(index)];
+                if (!current) return [];
             }
             return current.subtasks || [];
         }
@@ -500,8 +504,10 @@
             let current = task;
             for (let i = 0; i < parts.length - 1; i++) {
                 current = (current.subtasks || [])[parseInt(parts[i])];
+                if (!current) return null;
             }
-            return current;
+            const targetIndex = parseInt(parts[parts.length - 1]);
+            return (current.subtasks || [])[targetIndex];
         }
 
         function renderSubtasks(key, task, container, path = '', level = 1) {
@@ -523,6 +529,7 @@
                 const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
                 const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
 
+                // Renderizar o HTML primeiro
                 subLi.innerHTML = `
                     <div class="task-row">
                         ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[fullPath] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
@@ -544,6 +551,9 @@
                     renderSubtasks(key, subtask, subtasksContainer, subPath, level + 1);
                 }
 
+                container.appendChild(subLi);
+
+                // Adicionar eventos após renderizar
                 subLi.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
                     e.stopPropagation();
                     toggleSubtask(key, path, index);
@@ -581,8 +591,6 @@
                 }
                 subLi.querySelector('textarea').addEventListener('change', (e) => updateSubtaskNotes(key, path, index, e.target));
                 subLi.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
-
-                container.appendChild(subLi);
             });
         }
 
@@ -639,6 +647,8 @@
                         renderSubtasks(key, task, subtasksContainer);
                     }
 
+                    taskList.appendChild(li);
+
                     li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
                         e.stopPropagation();
                         toggleTask(key);
@@ -684,8 +694,6 @@
                     }
                     li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
                     li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
-
-                    taskList.appendChild(li);
                 });
 
                 document.addEventListener('click', (e) => {

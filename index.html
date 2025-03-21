@@ -201,14 +201,18 @@
                     } else {
                         const parts = path.split('/').filter(p => p !== 'subtasks');
                         let current = task;
-                        for (let i = 0; i < parts.length; i++) {
-                            const index = parseInt(parts[i]);
-                            if (!current.subtasks) current.subtasks = [];
-                            if (!current.subtasks[index]) current.subtasks[index] = { subtasks: [] };
-                            current = current.subtasks[index];
+                        for (let i = 0; i < parts.length - 1; i++) {
+                            current = (current.subtasks || [])[parseInt(parts[i])];
+                            if (!current) {
+                                console.error("Erro: Caminho inválido na estrutura da tarefa");
+                                return;
+                            }
                         }
-                        current.subtasks = current.subtasks || [];
-                        current.subtasks.push(newSubtask);
+                        const targetIndex = parseInt(parts[parts.length - 1]);
+                        if (!current.subtasks) current.subtasks = [];
+                        if (!current.subtasks[targetIndex]) current.subtasks[targetIndex] = { subtasks: [] };
+                        current.subtasks[targetIndex].subtasks = current.subtasks[targetIndex].subtasks || [];
+                        current.subtasks[targetIndex].subtasks.push(newSubtask);
                     }
 
                     console.log("Nova subtarefa adicionada:", newSubtask);
@@ -507,6 +511,7 @@
                 current = (current.subtasks || [])[parseInt(parts[i])];
                 if (!current) return null;
             }
+            const targetIndex = parseInt(parts[parts.length - 1]);
             return current;
         }
 
@@ -552,7 +557,6 @@
 
                 container.appendChild(subLi);
 
-                // Eventos não-checkbox
                 subLi.querySelector('.task-text').addEventListener('click', () => toggleNotes(subLi));
                 if (hasSubtasks) {
                     subLi.querySelector('.expand-btn').addEventListener('click', (e) => {
@@ -615,7 +619,7 @@
                     li.innerHTML = `
                         <div class="task-row">
                             ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[key] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-key="${key}">
+                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-key="${key}" data-path="" data-index="-1">
                             <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                             <div class="category-dropdown">
                                 <button class="category-btn">Categoria</button>
@@ -644,7 +648,6 @@
 
                     taskList.appendChild(li);
 
-                    // Eventos não-checkbox
                     li.querySelector('.task-text').addEventListener('click', () => toggleNotes(li));
                     if (hasSubtasks) {
                         li.querySelector('.expand-btn').addEventListener('click', (e) => {
@@ -694,9 +697,9 @@
                         e.stopPropagation();
                         const key = checkbox.getAttribute('data-key');
                         const path = checkbox.getAttribute('data-path');
-                        const index = checkbox.getAttribute('data-index');
-                        if (path && index !== null) {
-                            toggleSubtask(key, path, parseInt(index));
+                        const index = parseInt(checkbox.getAttribute('data-index'));
+                        if (path !== '' && index >= 0) {
+                            toggleSubtask(key, path, index);
                         } else {
                             toggleTask(key);
                         }

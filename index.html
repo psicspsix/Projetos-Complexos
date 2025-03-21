@@ -349,31 +349,21 @@
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
                 let current = task;
-                if (path) {
-                    const parts = path.split('/').filter(p => p !== '');
-                    for (let i = 0; i < parts.length - 1; i++) {
-                        current = (current.subtasks || [])[parseInt(parts[i])];
-                        if (!current) {
-                            console.error("Caminho inválido para subtarefa:", { parentKey, path, subtaskIndex });
-                            return;
-                        }
+                const parts = path.split('/').filter(p => p !== '');
+                for (const index of parts.slice(0, -1)) {
+                    current = (current.subtasks || [])[parseInt(index)];
+                    if (!current) {
+                        console.error("Caminho inválido para subtarefa:", { parentKey, path, subtaskIndex });
+                        return;
                     }
-                    const finalIndex = parseInt(parts[parts.length - 1]);
-                    console.log("Subtarefas encontradas no nível correto:", current.subtasks);
-                    if (current.subtasks && current.subtasks[finalIndex]) {
-                        current.subtasks[finalIndex].completed = !current.subtasks[finalIndex].completed;
-                        update(taskRef, task);
-                    } else {
-                        console.error("Subtarefa não encontrada para:", { parentKey, path, subtaskIndex });
-                    }
+                }
+                const finalIndex = parseInt(parts[parts.length - 1]);
+                console.log("Subtarefas encontradas no nível correto:", current.subtasks);
+                if (current.subtasks && current.subtasks[finalIndex]) {
+                    current.subtasks[finalIndex].completed = !current.subtasks[finalIndex].completed;
+                    update(taskRef, task);
                 } else {
-                    console.log("Subtarefas encontradas (nível 1):", task.subtasks);
-                    if (task.subtasks && task.subtasks[subtaskIndex]) {
-                        task.subtasks[subtaskIndex].completed = !task.subtasks[subtaskIndex].completed;
-                        update(taskRef, task);
-                    } else {
-                        console.error("Subtarefa não encontrada para:", { parentKey, path, subtaskIndex });
-                    }
+                    console.error("Subtarefa não encontrada para:", { parentKey, path, subtaskIndex });
                 }
             }, { onlyOnce: true });
         }
@@ -716,8 +706,10 @@
                     li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
                 });
 
+                // Adicionar eventos dos checkboxes após a renderização completa
                 document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.addEventListener('click', (e) => {
+                    checkbox.removeEventListener('click', checkbox._clickHandler); // Remove handlers anteriores
+                    const handler = (e) => {
                         e.stopPropagation();
                         const id = checkbox.getAttribute('data-id');
                         console.log("Checkbox clicado com id:", id);
@@ -730,7 +722,9 @@
                             const index = parseInt(parts[parts.length - 1]);
                             toggleSubtask(key, path, index);
                         }
-                    });
+                    };
+                    checkbox._clickHandler = handler;
+                    checkbox.addEventListener('click', handler);
                 });
 
                 document.addEventListener('click', (e) => {

@@ -46,7 +46,7 @@
     <div class="header">
         <h1>Projetos Complexos</h1>
         <div class="category-buttons">
-            <button id="paymentsBtn">Pagamentos</button>
+            <button id="mainProjectsBtn">Projetos Principais</button>
             <button id="proposedBtn">Proj. Propostos</button>
             <button id="inProgressBtn">Proj. em Andamento</button>
             <button id="futureBtn">Proj. Futuros</button>
@@ -82,7 +82,7 @@
         let editingTaskKey = null;
         let editingSubtask = null;
         let addingSubtaskToKey = null;
-        let currentCategory = 'payments';
+        let currentCategory = 'mainProjects';
         let expandedTasks = {};
         let targetTaskKey = null;
 
@@ -127,7 +127,7 @@
             const validateSubtaskConstraints = (parentTask, newDueDate, newPriority) => {
                 if (!parentTask) {
                     console.log("Erro: parentTask é undefined");
-                    return true; // Permitir se não houver pai válido
+                    return true;
                 }
                 if (newDueDate && parentTask.dueDate && newDueDate > parentTask.dueDate) {
                     document.getElementById('error').textContent = "Data da subtarefa não pode ser posterior à da tarefa!";
@@ -209,8 +209,8 @@
                             }
                         }
                         const targetIndex = parseInt(parts[parts.length - 1]);
-                        if (!current.subtasks) current.subtasks = [];
-                        if (!current.subtasks[targetIndex]) current.subtasks[targetIndex] = { subtasks: [] };
+                        current.subtasks = current.subtasks || [];
+                        current.subtasks[targetIndex] = current.subtasks[targetIndex] || {};
                         current.subtasks[targetIndex].subtasks = current.subtasks[targetIndex].subtasks || [];
                         current.subtasks[targetIndex].subtasks.push(newSubtask);
                     }
@@ -511,11 +511,11 @@
                 current = (current.subtasks || [])[parseInt(parts[i])];
                 if (!current) return null;
             }
-            const targetIndex = parseInt(parts[parts.length - 1]);
             return current;
         }
 
         function renderSubtasks(key, task, container, path = '', level = 1) {
+            console.log(`Renderizando subtarefas para key: ${key}, path: ${path}, level: ${level}, task:`, task);
             if (!task.subtasks || task.subtasks.length === 0 || level > 4) return;
 
             const sortedSubtasks = [...task.subtasks].sort((a, b) => {
@@ -537,7 +537,7 @@
                 subLi.innerHTML = `
                     <div class="task-row">
                         ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[fullPath] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-key="${key}" data-path="${path}" data-index="${index}">
+                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-subtask="${key}/${subPath}">
                         <span class="task-text ${isSubtaskBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
@@ -619,12 +619,12 @@
                     li.innerHTML = `
                         <div class="task-row">
                             ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[key] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-key="${key}" data-path="" data-index="-1">
+                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-task="${key}">
                             <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                             <div class="category-dropdown">
                                 <button class="category-btn">Categoria</button>
                                 <div class="dropdown-content">
-                                    <button class="dropdown-item" data-category="payments">Pagamentos</button>
+                                    <button class="dropdown-item" data-category="mainProjects">Projetos Principais</button>
                                     <button class="dropdown-item" data-category="proposed">Proj. Propostos</button>
                                     <button class="dropdown-item" data-category="inProgress">Proj. em Andamento</button>
                                     <button class="dropdown-item" data-category="future">Proj. Futuros</button>
@@ -695,13 +695,15 @@
                 document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                     checkbox.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const key = checkbox.getAttribute('data-key');
-                        const path = checkbox.getAttribute('data-path');
-                        const index = parseInt(checkbox.getAttribute('data-index'));
-                        if (path !== '' && index >= 0) {
+                        const taskId = checkbox.getAttribute('data-task');
+                        const subtaskId = checkbox.getAttribute('data-subtask');
+                        if (subtaskId) {
+                            const [key, ...pathParts] = subtaskId.split('/');
+                            const path = pathParts.slice(0, -2).join('/');
+                            const index = parseInt(pathParts[pathParts.length - 1]);
                             toggleSubtask(key, path, index);
-                        } else {
-                            toggleTask(key);
+                        } else if (taskId) {
+                            toggleTask(taskId);
                         }
                     });
                 });
@@ -716,9 +718,9 @@
             });
         }
 
-        setCategory('payments');
+        setCategory('mainProjects');
 
-        document.getElementById('paymentsBtn').addEventListener('click', () => setCategory('payments'));
+        document.getElementById('mainProjectsBtn').addEventListener('click', () => setCategory('mainProjects'));
         document.getElementById('proposedBtn').addEventListener('click', () => setCategory('proposed'));
         document.getElementById('inProgressBtn').addEventListener('click', () => setCategory('inProgress'));
         document.getElementById('futureBtn').addEventListener('click', () => setCategory('future'));

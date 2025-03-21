@@ -127,7 +127,7 @@
             const validateSubtaskConstraints = (parentTask, newDueDate, newPriority) => {
                 if (!parentTask) {
                     console.log("Erro: parentTask é undefined");
-                    return true; // Permitir se não houver pai válido (nível 1)
+                    return true; // Permitir se não houver pai válido
                 }
                 if (newDueDate && parentTask.dueDate && newDueDate > parentTask.dueDate) {
                     document.getElementById('error').textContent = "Data da subtarefa não pode ser posterior à da tarefa!";
@@ -196,15 +196,16 @@
                     };
 
                     if (!path) {
-                        // Nível 1: Adicionar diretamente ao subtasks da tarefa raiz
                         task.subtasks = task.subtasks || [];
                         task.subtasks.push(newSubtask);
                     } else {
-                        // Níveis 2+: Adicionar ao subtasks do nível anterior
                         const parts = path.split('/').filter(p => p !== 'subtasks');
                         let current = task;
-                        for (const index of parts) {
-                            current = (current.subtasks || [])[parseInt(index)] || (current.subtasks = current.subtasks || [], current.subtasks[parseInt(index)] = {});
+                        for (let i = 0; i < parts.length; i++) {
+                            const index = parseInt(parts[i]);
+                            if (!current.subtasks) current.subtasks = [];
+                            if (!current.subtasks[index]) current.subtasks[index] = { subtasks: [] };
+                            current = current.subtasks[index];
                         }
                         current.subtasks = current.subtasks || [];
                         current.subtasks.push(newSubtask);
@@ -506,8 +507,7 @@
                 current = (current.subtasks || [])[parseInt(parts[i])];
                 if (!current) return null;
             }
-            const targetIndex = parseInt(parts[parts.length - 1]);
-            return (current.subtasks || [])[targetIndex];
+            return current;
         }
 
         function renderSubtasks(key, task, container, path = '', level = 1) {
@@ -529,11 +529,10 @@
                 const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
                 const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
 
-                // Renderizar o HTML primeiro
                 subLi.innerHTML = `
                     <div class="task-row">
                         ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[fullPath] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                        <input type="checkbox" ${subtask.completed ? 'checked' : ''}>
+                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-key="${key}" data-path="${path}" data-index="${index}">
                         <span class="task-text ${isSubtaskBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
@@ -553,11 +552,7 @@
 
                 container.appendChild(subLi);
 
-                // Adicionar eventos após renderizar
-                subLi.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    toggleSubtask(key, path, index);
-                });
+                // Eventos não-checkbox
                 subLi.querySelector('.task-text').addEventListener('click', () => toggleNotes(subLi));
                 if (hasSubtasks) {
                     subLi.querySelector('.expand-btn').addEventListener('click', (e) => {
@@ -620,7 +615,7 @@
                     li.innerHTML = `
                         <div class="task-row">
                             ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[key] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                            <input type="checkbox" ${task.completed ? 'checked' : ''}>
+                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-key="${key}">
                             <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                             <div class="category-dropdown">
                                 <button class="category-btn">Categoria</button>
@@ -649,10 +644,7 @@
 
                     taskList.appendChild(li);
 
-                    li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        toggleTask(key);
-                    });
+                    // Eventos não-checkbox
                     li.querySelector('.task-text').addEventListener('click', () => toggleNotes(li));
                     if (hasSubtasks) {
                         li.querySelector('.expand-btn').addEventListener('click', (e) => {
@@ -694,6 +686,21 @@
                     }
                     li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
                     li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
+                });
+
+                // Adicionar eventos de checkbox após toda renderização
+                document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const key = checkbox.getAttribute('data-key');
+                        const path = checkbox.getAttribute('data-path');
+                        const index = checkbox.getAttribute('data-index');
+                        if (path && index !== null) {
+                            toggleSubtask(key, path, parseInt(index));
+                        } else {
+                            toggleTask(key);
+                        }
+                    });
                 });
 
                 document.addEventListener('click', (e) => {

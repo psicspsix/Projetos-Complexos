@@ -350,8 +350,12 @@
                 const task = snapshot.val();
                 const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
                 console.log("Subtarefas encontradas:", subtasks);
-                subtasks[subtaskIndex].completed = !subtasks[subtaskIndex].completed;
-                update(taskRef, task);
+                if (subtasks && subtasks[subtaskIndex]) {
+                    subtasks[subtaskIndex].completed = !subtasks[subtaskIndex].completed;
+                    update(taskRef, task);
+                } else {
+                    console.error("Subtarefa não encontrada para:", { parentKey, path, subtaskIndex });
+                }
             }, { onlyOnce: true });
         }
 
@@ -496,7 +500,7 @@
 
         function getNestedSubtasks(task, path) {
             if (!path) return task.subtasks || [];
-            const parts = path.split('/').filter(p => p !== 'subtasks');
+            const parts = path.split('/').filter(p => p !== '');
             let current = task;
             for (const index of parts) {
                 current = (current.subtasks || [])[parseInt(index)];
@@ -507,7 +511,7 @@
 
         function getParentTask(task, path) {
             if (!path) return task;
-            const parts = path.split('/').filter(p => p !== 'subtasks');
+            const parts = path.split('/').filter(p => p !== '');
             let current = task;
             for (let i = 0; i < parts.length - 1; i++) {
                 current = (current.subtasks || [])[parseInt(parts[i])];
@@ -531,15 +535,15 @@
             sortedSubtasks.forEach((subtask, index) => {
                 const subLi = document.createElement('li');
                 subLi.className = `subtask-level-${level} ${subtask.completed ? 'completed' : ''}`;
-                const subPath = `${path}/subtasks/${index}`;
-                const fullPath = path ? `${key}/${subPath}` : `${key}/subtasks/${index}`;
+                const subPath = path ? `${path}/${index}` : `${index}`;
+                const fullPath = `${key}/${subPath}`;
                 const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
                 const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
 
                 subLi.innerHTML = `
                     <div class="task-row">
                         ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[fullPath] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-id="${key}/${subPath}/${index}">
+                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-id="${key}/${subPath}">
                         <span class="task-text ${isSubtaskBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
@@ -698,12 +702,12 @@
                         e.stopPropagation();
                         const id = checkbox.getAttribute('data-id');
                         console.log("Checkbox clicado com id:", id);
-                        const parts = id.split('/');
+                        const parts = id.split('/').filter(p => p !== '');
                         const key = parts[0];
                         if (parts.length === 1) {
                             toggleTask(key);
                         } else {
-                            const path = parts.slice(1, -1).join('/');
+                            const path = parts.slice(1, parts.length - 1).join('/');
                             const index = parseInt(parts[parts.length - 1]);
                             toggleSubtask(key, path, index);
                         }

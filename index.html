@@ -163,7 +163,7 @@
                 const taskRef = ref(db, `tasks/${key}`);
                 onValue(taskRef, (snapshot) => {
                     const task = snapshot.val();
-                    const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
+                    const subtasks = path ? getNestedSubtasks(task, path) : (task.subtasks || []);
                     const parentTask = path ? getParentTask(task, path) : task;
                     if (!validateSubtaskConstraints(parentTask, dueDate, priority)) return;
 
@@ -175,6 +175,7 @@
                         completed: false,
                         subtasks: []
                     });
+                    if (!path) task.subtasks = subtasks; // Garantir que o nível 1 seja atualizado corretamente
                     update(taskRef, task).then(() => {
                         resetForm();
                         document.getElementById('success').textContent = "Subtarefa adicionada com sucesso!";
@@ -440,21 +441,20 @@
 
         function getNestedSubtasks(task, path) {
             if (!path) return task.subtasks || [];
-            const parts = path.split('/').filter(Boolean);
+            const parts = path.split('/').filter(p => p !== 'subtasks');
             let current = task;
-            for (const part of parts) {
-                if (part === 'subtasks') continue;
-                current = (current.subtasks || [])[parseInt(part)];
+            for (const index of parts) {
+                current = (current.subtasks || [])[parseInt(index)];
             }
             return current.subtasks || [];
         }
 
         function getParentTask(task, path) {
             if (!path) return task;
-            const parts = path.split('/').filter(Boolean);
+            const parts = path.split('/').filter(p => p !== 'subtasks');
             let current = task;
-            for (let i = 0; i < parts.length - 1; i += 2) {
-                current = (current.subtasks || [])[parseInt(parts[i + 1])];
+            for (let i = 0; i < parts.length - 1; i++) {
+                current = (current.subtasks || [])[parseInt(parts[i])];
             }
             return current;
         }

@@ -344,10 +344,12 @@
         }
 
         function toggleSubtask(parentKey, path, subtaskIndex) {
+            console.log("toggleSubtask chamado com:", { parentKey, path, subtaskIndex });
             const taskRef = ref(db, `tasks/${parentKey}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
                 const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
+                console.log("Subtarefas encontradas:", subtasks);
                 subtasks[subtaskIndex].completed = !subtasks[subtaskIndex].completed;
                 update(taskRef, task);
             }, { onlyOnce: true });
@@ -515,7 +517,7 @@
         }
 
         function renderSubtasks(key, task, container, path = '', level = 1) {
-            console.log(`Renderizando subtarefas para key: ${key}, path: ${path}, level: ${level}, task:`, task);
+            console.log(`Renderizando subtarefas para key: ${key}, path: ${path}, level: ${level}, subtasks:`, task.subtasks);
             if (!task.subtasks || task.subtasks.length === 0 || level > 4) return;
 
             const sortedSubtasks = [...task.subtasks].sort((a, b) => {
@@ -537,7 +539,7 @@
                 subLi.innerHTML = `
                     <div class="task-row">
                         ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[fullPath] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-subtask="${key}/${subPath}">
+                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-subtask-id="${key}/${subPath}">
                         <span class="task-text ${isSubtaskBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
@@ -619,7 +621,7 @@
                     li.innerHTML = `
                         <div class="task-row">
                             ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[key] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-task="${key}">
+                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-task-id="${key}">
                             <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                             <div class="category-dropdown">
                                 <button class="category-btn">Categoria</button>
@@ -691,12 +693,11 @@
                     li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
                 });
 
-                // Adicionar eventos de checkbox após toda renderização
                 document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                     checkbox.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const taskId = checkbox.getAttribute('data-task');
-                        const subtaskId = checkbox.getAttribute('data-subtask');
+                        const taskId = checkbox.getAttribute('data-task-id');
+                        const subtaskId = checkbox.getAttribute('data-subtask-id');
                         if (subtaskId) {
                             const [key, ...pathParts] = subtaskId.split('/');
                             const path = pathParts.slice(0, -2).join('/');

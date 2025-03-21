@@ -79,8 +79,9 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const tasksRef = ref(db, 'tasks');
-        let editingTask = null; // { key, path, index }
-        let addingSubtaskTo = null; // { key, path }
+        let editingTaskKey = null;
+        let editingSubtask = null;
+        let addingSubtaskToKey = null;
         let currentCategory = 'payments';
         let expandedTasks = {};
         let targetTaskKey = null;
@@ -107,7 +108,7 @@
             }
         }
 
-        function saveTask() {
+        function saveTask(taskKey = null) {
             const taskInput = document.getElementById('taskInput');
             const dueDateInput = document.getElementById('dueDate');
             const priorityInput = document.getElementById('priority');
@@ -132,49 +133,38 @@
                 return true;
             };
 
-            const getTaskRef = (key, path = '') => ref(db, `tasks/${key}${path}`);
-
-            if (editingTask) {
-                const { key, path, index } = editingTask;
-                const taskRef = getTaskRef(key);
-                onValue(taskRef, (snapshot) => {
-                    const task = snapshot.val();
-                    if (path) {
-                        const subtasks = getNestedSubtasks(task, path);
-                        const parentSubtasks = getNestedSubtasks(task, path.slice(0, path.lastIndexOf('/subtasks')));
-                        const parentIndex = parseInt(path.split('/subtasks/').slice(-2)[0]);
-                        const parentTask = parentSubtasks[parentIndex];
-                        if (!validateSubtaskConstraints(parentTask, dueDate, priority)) return;
-
-                        subtasks[index] = {
-                            text: taskText,
-                            dueDate: dueDate,
-                            priority: Math.min(Math.max(priority, 1), 1000),
-                            notes: subtasks[index].notes || "",
-                            completed: subtasks[index].completed || false,
-                            subtasks: subtasks[index].subtasks || []
-                        };
-                    } else {
-                        if (!validateSubtaskConstraints(task, dueDate, priority)) return;
-                        task.text = taskText;
-                        task.dueDate = dueDate;
-                        task.priority = Math.min(Math.max(priority, 1), 1000);
-                    }
-                    update(taskRef, task).then(() => {
-                        resetForm();
-                        document.getElementById('success').textContent = path ? "Subtarefa atualizada com sucesso!" : "Tarefa atualizada com sucesso!";
-                        scrollToTarget(key);
-                    }).catch((error) => {
-                        document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
-                    });
-                }, { onlyOnce: true });
-            } else if (addingSubtaskTo) {
-                const { key, path } = addingSubtaskTo;
-                const taskRef = getTaskRef(key);
+            if (editingSubtask) {
+                const { parentKey, path, index } = editingSubtask;
+                const taskRef = ref(db, `tasks/${parentKey}`);
                 onValue(taskRef, (snapshot) => {
                     const task = snapshot.val();
                     const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
-                    const parentTask = path ? getNestedSubtasks(task, path.slice(0, path.lastIndexOf('/subtasks')))[parseInt(path.split('/subtasks/').pop())] : task;
+                    const parentTask = path ? getParentTask(task, path) : task;
+                    if (!validateSubtaskConstraints(parentTask, dueDate, priority)) return;
+
+                    subtasks[index] = {
+                        text: taskText,
+                        dueDate: dueDate,
+                        priority: Math.min(Math.max(priority, 1), 1000),
+                        notes: subtasks[index].notes || "",
+                        completed: subtasks[index].completed || false,
+                        subtasks: subtasks[index].subtasks || []
+                    };
+                    update(taskRef, task).then(() => {
+                        resetForm();
+                        document.getElementById('success').textContent = "Subtarefa atualizada com sucesso!";
+                        scrollToTarget(parentKey);
+                    }).catch((error) => {
+                        document.getElementById('error').textContent = "Erro ao atualizar subtarefa: " + error.message;
+                    });
+                }, { onlyOnce: true });
+            } else if (addingSubtaskToKey) {
+                const { key, path } = addingSubtaskToKey;
+                const taskRef = ref(db, `tasks/${key}`);
+                onValue(taskRef, (snapshot) => {
+                    const task = snapshot.val();
+                    const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
+                    const parentTask = path ? getParentTask(task, path) : task;
                     if (!validateSubtaskConstraints(parentTask, dueDate, priority)) return;
 
                     subtasks.push({
@@ -191,6 +181,27 @@
                         scrollToTarget(key);
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao adicionar subtarefa: " + error.message;
+                    });
+                }, { onlyOnce: true });
+            } else if (editingTaskKey) {
+                const taskRef = ref(db, `tasks/${editingTaskKey}`);
+                onValue(taskRef, (snapshot) => {
+                    const currentTask = snapshot.val();
+                    const updatedTask = {
+                        text: taskText,
+                        dueDate: dueDate,
+                        priority: Math.min(Math.max(priority, 1), 1000),
+                        notes: currentTask.notes || "",
+                        completed: currentTask.completed || false,
+                        category: currentCategory,
+                        subtasks: currentTask.subtasks || []
+                    };
+                    set(taskRef, updatedTask).then(() => {
+                        resetForm();
+                        document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
+                        scrollToTarget(editingTaskKey);
+                    }).catch((error) => {
+                        document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
                     });
                 }, { onlyOnce: true });
             } else {
@@ -218,67 +229,94 @@
             document.getElementById('priority').value = '';
             document.getElementById('actionButton').textContent = 'Adicionar';
             document.getElementById('error').textContent = '';
-            editingTask = null;
-            addingSubtaskTo = null;
+            editingTaskKey = null;
+            editingSubtask = null;
+            addingSubtaskToKey = null;
             targetTaskKey = null;
         }
 
-        function editTask(key, path = '', index = null) {
-            const taskRef = getTaskRef(key);
+        function editTask(key) {
+            const taskRef = ref(db, `tasks/${key}`);
             targetTaskKey = key;
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
-                const target = path ? getNestedSubtasks(task, path)[index] : task;
-                document.getElementById('taskInput').value = target.text;
-                document.getElementById('dueDate').value = target.dueDate || '';
-                document.getElementById('priority').value = target.priority;
-                document.getElementById('actionButton').textContent = path ? 'Salvar Subtarefa' : 'Salvar';
-                editingTask = { key, path, index };
-                addingSubtaskTo = null;
+                document.getElementById('taskInput').value = task.text;
+                document.getElementById('dueDate').value = task.dueDate || '';
+                document.getElementById('priority').value = task.priority;
+                document.getElementById('actionButton').textContent = 'Salvar';
+                editingTaskKey = key;
+                editingSubtask = null;
+                addingSubtaskToKey = null;
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 setTimeout(() => document.getElementById('taskInput').focus(), 300);
             }, { onlyOnce: true });
         }
 
-        function addSubtask(key, path = '') {
-            targetTaskKey = key;
+        function addSubtask(parentKey, path = '') {
+            targetTaskKey = parentKey;
             document.getElementById('taskInput').value = '';
             document.getElementById('dueDate').value = '';
             document.getElementById('priority').value = '';
             document.getElementById('actionButton').textContent = 'Adicionar Subtarefa';
-            editingTask = null;
-            addingSubtaskTo = { key, path };
+            editingTaskKey = null;
+            editingSubtask = null;
+            addingSubtaskToKey = { key: parentKey, path };
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => document.getElementById('taskInput').focus(), 300);
         }
 
-        function toggleTask(key, path = '') {
-            const taskRef = getTaskRef(key);
+        function editSubtask(parentKey, path, index) {
+            const taskRef = ref(db, `tasks/${parentKey}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
-                if (path) {
-                    const subtasks = getNestedSubtasks(task, path);
-                    const index = parseInt(path.split('/subtasks/').pop());
-                    subtasks[index].completed = !subtasks[index].completed;
-                } else {
-                    task.completed = !task.completed;
-                }
+                const subtask = path ? getNestedSubtasks(task, path)[index] : task.subtasks[index];
+                document.getElementById('taskInput').value = subtask.text;
+                document.getElementById('dueDate').value = subtask.dueDate || '';
+                document.getElementById('priority').value = subtask.priority || '';
+                document.getElementById('actionButton').textContent = 'Salvar Subtarefa';
+                editingTaskKey = null;
+                editingSubtask = { parentKey, path, index };
+                addingSubtaskToKey = null;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setTimeout(() => document.getElementById('taskInput').focus(), 300);
+            }, { onlyOnce: true });
+        }
+
+        function toggleTask(key) {
+            const taskRef = ref(db, `tasks/${key}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                update(taskRef, { completed: !task.completed });
+            }, { onlyOnce: true });
+        }
+
+        function toggleSubtask(parentKey, path, subtaskIndex) {
+            const taskRef = ref(db, `tasks/${parentKey}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
+                subtasks[subtaskIndex].completed = !subtasks[subtaskIndex].completed;
                 update(taskRef, task);
             }, { onlyOnce: true });
         }
 
-        function deleteTask(key, path = '') {
-            const taskRef = getTaskRef(key);
+        function deleteTask(key) {
+            const taskRef = ref(db, `tasks/${key}`);
+            remove(taskRef);
+        }
+
+        function deleteSubtask(parentKey, path, subtaskIndex) {
+            const taskRef = ref(db, `tasks/${parentKey}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
-                if (path) {
-                    const subtasks = getNestedSubtasks(task, path.slice(0, path.lastIndexOf('/subtasks')));
-                    const index = parseInt(path.split('/subtasks/').pop());
-                    subtasks.splice(index, 1);
-                    update(taskRef, task);
-                } else {
-                    remove(taskRef);
-                }
+                const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
+                subtasks.splice(subtaskIndex, 1);
+                update(taskRef, task).then(() => {
+                    document.getElementById('success').textContent = "Subtarefa excluída com sucesso!";
+                    setTimeout(() => document.getElementById('success').textContent = '', 2000);
+                }).catch((error) => {
+                    document.getElementById('error').textContent = "Erro ao excluir subtarefa: " + error.message;
+                });
             }, { onlyOnce: true });
         }
 
@@ -287,19 +325,24 @@
             notesDiv.classList.toggle('visible');
         }
 
-        function updateNotes(key, path, textarea) {
-            const taskRef = getTaskRef(key);
+        function updateNotes(key, textarea) {
+            const taskRef = ref(db, `tasks/${key}`);
+            update(taskRef, { notes: textarea.value });
+        }
+
+        function updateSubtaskNotes(parentKey, path, subtaskIndex, textarea) {
+            const taskRef = ref(db, `tasks/${parentKey}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
-                if (path) {
-                    const subtasks = getNestedSubtasks(task, path);
-                    const index = parseInt(path.split('/subtasks/').pop());
-                    subtasks[index].notes = textarea.value;
-                } else {
-                    task.notes = textarea.value;
-                }
+                const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
+                subtasks[subtaskIndex].notes = textarea.value;
                 update(taskRef, task);
             }, { onlyOnce: true });
+        }
+
+        function toggleCategoryDropdown(dropdown) {
+            const content = dropdown.querySelector('.dropdown-content');
+            content.style.display = content.style.display === 'block' ? 'none' : 'block';
         }
 
         function toggleSubtasks(key, path, li) {
@@ -313,7 +356,12 @@
 
         function changeCategory(key, newCategory) {
             const taskRef = ref(db, `tasks/${key}`);
-            update(taskRef, { category: newCategory }).then(() => renderTasks());
+            update(taskRef, { category: newCategory })
+                .then(() => renderTasks())
+                .catch((error) => {
+                    console.error("Erro ao alterar categoria:", error);
+                    document.getElementById('error').textContent = "Erro ao alterar categoria: " + error.message;
+                });
         }
 
         function formatDate(dateStr) {
@@ -358,7 +406,7 @@
             if (!dueDate) return false;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const due = New Date(dueDate);
+            const due = new Date(dueDate);
             due.setHours(0, 0, 0, 0);
             const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
             return today.getTime() - due.getTime() >= twoDaysInMs;
@@ -392,16 +440,27 @@
 
         function getNestedSubtasks(task, path) {
             if (!path) return task.subtasks || [];
-            const parts = path.split('/subtasks/').filter(Boolean);
+            const parts = path.split('/').filter(Boolean);
             let current = task;
             for (const part of parts) {
+                if (part === 'subtasks') continue;
                 current = (current.subtasks || [])[parseInt(part)];
             }
             return current.subtasks || [];
         }
 
+        function getParentTask(task, path) {
+            if (!path) return task;
+            const parts = path.split('/').filter(Boolean);
+            let current = task;
+            for (let i = 0; i < parts.length - 1; i += 2) {
+                current = (current.subtasks || [])[parseInt(parts[i + 1])];
+            }
+            return current;
+        }
+
         function renderSubtasks(key, task, container, path = '', level = 1) {
-            if (!task.subtasks || task.subtasks.length === 0) return;
+            if (!task.subtasks || task.subtasks.length === 0 || level > 4) return;
 
             const sortedSubtasks = [...task.subtasks].sort((a, b) => {
                 if (a.completed !== b.completed) return a.completed - b.completed;
@@ -414,12 +473,10 @@
             sortedSubtasks.forEach((subtask, index) => {
                 const subLi = document.createElement('li');
                 subLi.className = `subtask-level-${level} ${subtask.completed ? 'completed' : ''}`;
-                subLi.setAttribute('data-key', `${key}${path}/subtasks/${index}`);
-                const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
-                const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
                 const subPath = `${path}/subtasks/${index}`;
                 const fullPath = path ? `${key}/${subPath}` : `${key}/subtasks/${index}`;
-                if (shouldExpandTask(subtask)) expandedTasks[fullPath] = true;
+                const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
+                const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
 
                 subLi.innerHTML = `
                     <div class="task-row">
@@ -428,7 +485,7 @@
                         <span class="task-text ${isSubtaskBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
-                        <button class="subtask-btn">${level < 4 ? 'Subtarefa' : ''}</button>
+                        ${level < 4 ? '<button class="subtask-btn">Subtarefa</button>' : ''}
                         ${subtask.notes && subtask.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
                     </div>
                     <div class="notes">
@@ -438,16 +495,16 @@
                 `;
 
                 const subtasksContainer = subLi.querySelector('.subtasks-container');
-                if (hasSubtasks && level < 4) {
+                if (hasSubtasks) {
                     renderSubtasks(key, subtask, subtasksContainer, subPath, level + 1);
                 }
 
                 subLi.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
                     e.stopPropagation();
-                    toggleTask(key, subPath);
+                    toggleSubtask(key, path, index);
                 });
                 subLi.querySelector('.task-text').addEventListener('click', () => toggleNotes(subLi));
-                if (hasSubtasks && level < 4) {
+                if (hasSubtasks) {
                     subLi.querySelector('.expand-btn').addEventListener('click', (e) => {
                         e.stopPropagation();
                         toggleSubtasks(key, subPath, subLi);
@@ -455,17 +512,20 @@
                 }
                 subLi.querySelector('.edit-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
-                    editTask(key, subPath, index);
+                    editSubtask(key, path, index);
                 });
                 subLi.querySelector('.delete-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
-                    deleteTask(key, subPath);
+                    deleteSubtask(key, path, index);
                 });
                 if (level < 4) {
-                    subLi.querySelector('.subtask-btn').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        addSubtask(key, subPath);
-                    });
+                    const subtaskBtn = subLi.querySelector('.subtask-btn');
+                    if (subtaskBtn) {
+                        subtaskBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            addSubtask(key, subPath);
+                        });
+                    }
                 }
                 const notesIndicator = subLi.querySelector('.has-notes');
                 if (notesIndicator) {
@@ -474,7 +534,7 @@
                         toggleNotes(subLi);
                     });
                 }
-                subLi.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, subPath, e.target));
+                subLi.querySelector('textarea').addEventListener('change', (e) => updateSubtaskNotes(key, path, index, e.target));
                 subLi.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
 
                 container.appendChild(subLi);
@@ -577,7 +637,7 @@
                             toggleNotes(li);
                         });
                     }
-                    li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, '', e.target));
+                    li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
                     li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
 
                     taskList.appendChild(li);
@@ -593,11 +653,6 @@
             });
         }
 
-        function toggleCategoryDropdown(dropdown) {
-            const content = dropdown.querySelector('.dropdown-content');
-            content.style.display = content.style.display === 'block' ? 'none' : 'block';
-        }
-
         setCategory('payments');
 
         document.getElementById('paymentsBtn').addEventListener('click', () => setCategory('payments'));
@@ -606,23 +661,30 @@
         document.getElementById('futureBtn').addEventListener('click', () => setCategory('future'));
         document.getElementById('allBtn').addEventListener('click', () => setCategory('all'));
 
-        document.getElementById('actionButton').addEventListener('click', saveTask);
+        document.getElementById('actionButton').addEventListener('click', () => {
+            const key = editingSubtask ? editingSubtask.parentKey : (addingSubtaskToKey ? addingSubtaskToKey.key : editingTaskKey);
+            saveTask(key);
+        });
+
         document.getElementById('taskInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                saveTask();
+                const key = editingSubtask ? editingSubtask.parentKey : (addingSubtaskToKey ? addingSubtaskToKey.key : editingTaskKey);
+                saveTask(key);
             }
         });
         document.getElementById('dueDate').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                saveTask();
+                const key = editingSubtask ? editingSubtask.parentKey : (addingSubtaskToKey ? addingSubtaskToKey.key : editingTaskKey);
+                saveTask(key);
             }
         });
         document.getElementById('priority').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                saveTask();
+                const key = editingSubtask ? editingSubtask.parentKey : (addingSubtaskToKey ? addingSubtaskToKey.key : editingTaskKey);
+                saveTask(key);
             }
         });
     </script>

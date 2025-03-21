@@ -178,7 +178,6 @@
                         console.error("Tarefa pai não encontrada para key:", key);
                         return;
                     }
-                    const subtasks = path ? getNestedSubtasks(task, path) : (task.subtasks || []);
                     const parentTask = path ? getParentTask(task, path) : task;
                     if (!validateSubtaskConstraints(parentTask, dueDate, priority)) return;
 
@@ -190,10 +189,26 @@
                         completed: false,
                         subtasks: []
                     };
-                    subtasks.push(newSubtask);
-                    if (!path) task.subtasks = subtasks; // Nível 1
+
+                    if (!path) {
+                        // Nível 1: Adicionar diretamente ao subtasks da tarefa raiz
+                        task.subtasks = task.subtasks || [];
+                        task.subtasks.push(newSubtask);
+                    } else {
+                        // Níveis 2+: Atualizar o subtasks do nível anterior
+                        const parts = path.split('/').filter(p => p !== 'subtasks');
+                        let current = task;
+                        for (let i = 0; i < parts.length - 1; i++) {
+                            current = (current.subtasks || [])[parseInt(parts[i])];
+                        }
+                        const targetIndex = parseInt(parts[parts.length - 1]);
+                        current = (current.subtasks || [])[targetIndex];
+                        current.subtasks = current.subtasks || [];
+                        current.subtasks.push(newSubtask);
+                    }
+
                     console.log("Nova subtarefa adicionada:", newSubtask);
-                    console.log("Subtasks atualizados:", subtasks);
+                    console.log("Tarefa atualizada:", task);
                     update(taskRef, task).then(() => {
                         resetForm();
                         document.getElementById('success').textContent = "Subtarefa adicionada com sucesso!";

@@ -201,18 +201,17 @@
                     } else {
                         const parts = path.split('/').filter(p => p !== 'subtasks');
                         let current = task;
-                        for (let i = 0; i < parts.length - 1; i++) {
-                            current = (current.subtasks || [])[parseInt(parts[i])];
-                            if (!current) {
-                                console.error("Erro: Caminho inválido na estrutura da tarefa");
-                                return;
+                        for (let i = 0; i < parts.length; i++) {
+                            const index = parseInt(parts[i]);
+                            if (!current.subtasks) current.subtasks = [];
+                            if (i === parts.length - 1) {
+                                current.subtasks[index] = current.subtasks[index] || { subtasks: [] };
+                                current.subtasks[index].subtasks = current.subtasks[index].subtasks || [];
+                                current.subtasks[index].subtasks.push(newSubtask);
+                            } else {
+                                current = current.subtasks[index] || (current.subtasks[index] = { subtasks: [] });
                             }
                         }
-                        const targetIndex = parseInt(parts[parts.length - 1]);
-                        current.subtasks = current.subtasks || [];
-                        current.subtasks[targetIndex] = current.subtasks[targetIndex] || {};
-                        current.subtasks[targetIndex].subtasks = current.subtasks[targetIndex].subtasks || [];
-                        current.subtasks[targetIndex].subtasks.push(newSubtask);
                     }
 
                     console.log("Nova subtarefa adicionada:", newSubtask);
@@ -336,6 +335,7 @@
         }
 
         function toggleTask(key) {
+            console.log("toggleTask chamado com key:", key);
             const taskRef = ref(db, `tasks/${key}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
@@ -539,7 +539,7 @@
                 subLi.innerHTML = `
                     <div class="task-row">
                         ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[fullPath] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-subtask-id="${key}/${subPath}">
+                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-id="${key}/${subPath}/${index}">
                         <span class="task-text ${isSubtaskBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
@@ -621,7 +621,7 @@
                     li.innerHTML = `
                         <div class="task-row">
                             ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[key] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
-                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-task-id="${key}">
+                            <input type="checkbox" ${task.completed ? 'checked' : ''} data-id="${key}">
                             <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                             <div class="category-dropdown">
                                 <button class="category-btn">Categoria</button>
@@ -696,15 +696,16 @@
                 document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                     checkbox.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const taskId = checkbox.getAttribute('data-task-id');
-                        const subtaskId = checkbox.getAttribute('data-subtask-id');
-                        if (subtaskId) {
-                            const [key, ...pathParts] = subtaskId.split('/');
-                            const path = pathParts.slice(0, -2).join('/');
-                            const index = parseInt(pathParts[pathParts.length - 1]);
+                        const id = checkbox.getAttribute('data-id');
+                        console.log("Checkbox clicado com id:", id);
+                        const parts = id.split('/');
+                        const key = parts[0];
+                        if (parts.length === 1) {
+                            toggleTask(key);
+                        } else {
+                            const path = parts.slice(1, -1).join('/');
+                            const index = parseInt(parts[parts.length - 1]);
                             toggleSubtask(key, path, index);
-                        } else if (taskId) {
-                            toggleTask(taskId);
                         }
                     });
                 });

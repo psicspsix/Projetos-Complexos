@@ -88,8 +88,8 @@
 
         console.log("Firebase conectado com sucesso!");
 
-        function scrollToTarget(key, path = '') {
-            console.log(`Tentando rolar para: ${key}, path: ${path}`);
+        function scrollToTarget(key, path = '', subtaskText = '') {
+            console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: ${subtaskText}`);
             const element = document.querySelector(`li[data-key="${key}"]`);
             if (!element) {
                 console.log(`Elemento NÃO encontrado: ${key}`);
@@ -112,40 +112,36 @@
                         expandedTasks[currentPath] = true;
                     }
                     const subtaskElements = subtasksContainer ? Array.from(subtasksContainer.querySelectorAll('li[data-subtask-index]')) : [];
-                    currentElement = subtaskElements.find(el => el.getAttribute('data-subtask-index') === parts[i]) || null;
+                    currentElement = subtaskElements.find(el => el.getAttribute('data-subtask-index') === parts[i]) || 
+                                    (subtaskText ? subtaskElements.find(el => el.querySelector('.task-text').textContent.includes(subtaskText)) : null);
                     if (!currentElement) {
                         console.log(`Subtarefa não encontrada no path: ${currentPath}`);
                         break;
                     }
                 }
-            } else {
-                const subtasksContainer = element.querySelector('.subtasks-container');
-                const expandBtn = element.querySelector('.expand-btn');
-                if (subtasksContainer && expandBtn) {
-                    subtasksContainer.classList.add('visible');
-                    expandBtn.textContent = '−';
-                    expandedTasks[key] = true;
-                }
             }
 
             setTimeout(() => {
-                const targetElement = currentElement || element; // Usa o elemento mais profundo ou a raiz
-                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                console.log(`Rolagem concluída para ${targetElement === element ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
-            }, 1000); // Atraso aumentado para garantir DOM atualizado
+                const targetElement = currentElement || element;
+                const rect = targetElement.getBoundingClientRect();
+                const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'smooth'
+                });
+                console.log(`Rolagem suave concluída para ${targetElement === element ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
+            }, 1500); // Atraso aumentado para garantir DOM
         }
 
         function scrollToInput() {
             const taskInput = document.getElementById('taskInput');
             const scrollPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
             console.log(`scrollToInput chamado: posição calculada=${scrollPosition}, posição atual=${window.pageYOffset}`);
-            setTimeout(() => {
-                window.scrollTo({
-                    top: scrollPosition,
-                    behavior: 'smooth'
-                });
-                console.log(`Rolagem suave iniciada para ${scrollPosition}`);
-            }, 500); // Atraso para garantir DOM pronto
+            window.scrollTo({
+                top: scrollPosition,
+                behavior: 'smooth'
+            });
+            console.log(`Rolagem suave iniciada para ${scrollPosition}`);
         }
 
         function saveTask(taskKey = null) {
@@ -205,7 +201,7 @@
                         resetForm();
                         document.getElementById('success').textContent = "Subtarefa atualizada com sucesso!";
                         const fullPath = path ? `${path}/${index}` : `${index}`;
-                        scrollToTarget(parentKey, fullPath);
+                        scrollToTarget(parentKey, fullPath, taskText);
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao atualizar subtarefa: " + error.message;
                         console.error("Erro ao atualizar subtarefa:", error);
@@ -264,7 +260,7 @@
                         document.getElementById('success').textContent = "Subtarefa adicionada com sucesso!";
                         console.log("Subtarefa adicionada com sucesso para:", key);
                         const newPath = path ? `${path}/${newIndex}` : `${newIndex}`;
-                        scrollToTarget(key, newPath);
+                        scrollToTarget(key, newPath, taskText);
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao adicionar subtarefa: " + error.message;
                         console.error("Erro ao adicionar subtarefa:", error);

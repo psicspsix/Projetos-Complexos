@@ -88,7 +88,16 @@
 
         console.log("Firebase conectado com sucesso!");
 
-        function expandPath(key, path) {
+        function waitForRender() {
+            return new Promise(resolve => {
+                requestAnimationFrame(() => {
+                    setTimeout(resolve, 100); // Pequeno atraso para garantir renderização
+                });
+            });
+        }
+
+        async function expandPath(key, path) {
+            await waitForRender(); // Espera o DOM atualizar
             const parts = path.split('/').filter(p => p !== '');
             let currentElement = document.querySelector(`li[data-key="${key}"]`);
             let currentPath = key;
@@ -100,17 +109,21 @@
                     subtasksContainer.classList.add('visible');
                     expandBtn.textContent = '−';
                     expandedTasks[currentPath] = true;
+                    await waitForRender(); // Espera a expansão ser refletida no DOM
+                } else {
+                    console.log(`Não foi possível expandir no path: ${currentPath}`);
+                    return null;
                 }
                 currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
                 if (!currentElement) {
-                    console.log(`Não foi possível expandir no path: ${currentPath}`);
-                    break;
+                    console.log(`Elemento não encontrado no path: ${currentPath}`);
+                    return null;
                 }
             }
             return currentElement;
         }
 
-        function scrollToTarget(key, path = '', subtaskText = '') {
+        async function scrollToTarget(key, path = '', subtaskText = '') {
             console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
             const rootElement = document.querySelector(`li[data-key="${key}"]`);
             if (!rootElement) {
@@ -121,7 +134,7 @@
 
             let targetElement = rootElement;
             if (path) {
-                targetElement = expandPath(key, path);
+                targetElement = await expandPath(key, path);
                 if (!targetElement) {
                     console.log(`Falha ao localizar elemento no path completo: ${key}/${path}`);
                     targetElement = rootElement; // Fallback para raiz
@@ -130,40 +143,42 @@
                 }
             }
 
-            setTimeout(() => {
-                const finalElement = targetElement || rootElement;
-                const rect = finalElement.getBoundingClientRect();
-                const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
-                console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
-                window.scrollTo({
-                    top: scrollPosition,
-                    behavior: 'smooth'
-                });
-                console.log(`Rolagem suave concluída para ${finalElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
-            }, 2000); // Aumentado para 2000ms
+            const rect = targetElement.getBoundingClientRect();
+            const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
+            console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
+            window.scrollTo({
+                top: scrollPosition,
+                behavior: 'smooth'
+            });
+            console.log(`Rolagem suave concluída para ${targetElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
         }
 
         function scrollToInput() {
             const taskInput = document.getElementById('taskInput');
-            const scrollPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
-            console.log(`scrollToInput chamado: posição calculada=${scrollPosition}, posição atual=${window.pageYOffset}`);
-            setTimeout(() => {
-                const currentPosition = window.pageYOffset;
-                window.scrollTo({
-                    top: scrollPosition,
-                    behavior: 'smooth'
-                });
-                setTimeout(() => {
-                    if (Math.abs(window.pageYOffset - scrollPosition) > 10) {
-                        console.log(`Rolagem falhou, tentando novamente: atual=${window.pageYOffset}, esperado=${scrollPosition}`);
-                        window.scrollTo({
-                            top: scrollPosition,
-                            behavior: 'smooth'
-                        });
-                    }
-                    console.log(`Rolagem suave concluída para ${scrollPosition}`);
-                }, 500);
-            }, 1000); // Aumentado para 1000ms
+            const targetPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
+            console.log(`scrollToInput chamado: posição calculada=${targetPosition}, posição atual=${window.pageYOffset}`);
+            
+            const startPosition = window.pageYOffset;
+            const distance = targetPosition - startPosition;
+            const duration = 1000; // 1 segundo
+            let startTime = null;
+
+            function animateScroll(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const progress = (timestamp - startTime) / duration;
+                const easeProgress = 1 - Math.pow(1 - progress, 4); // Easing suave
+                const currentPosition = startPosition + (distance * easeProgress);
+
+                window.scrollTo(0, currentPosition);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateScroll);
+                } else {
+                    console.log(`Rolagem suave concluída para ${targetPosition}`);
+                }
+            }
+
+            requestAnimationFrame(animateScroll);
         }
 
         function saveTask(taskKey = null) {

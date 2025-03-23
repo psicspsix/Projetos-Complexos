@@ -97,7 +97,6 @@
             }
             console.log(`Elemento encontrado: ${key}`);
             document.getElementById('success').textContent = '';
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
             if (path) {
                 const parts = path.split('/').filter(p => p !== '');
@@ -113,8 +112,15 @@
                         expandedTasks[currentPath] = true;
                     }
                     currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
-                    if (!currentElement) break;
+                    if (!currentElement) {
+                        console.log(`Subtarefa não encontrada no path: ${currentPath}`);
+                        break;
+                    }
                 }
+                // Rolar para o elemento mais profundo encontrado
+                setTimeout(() => {
+                    currentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 300); // Atraso para garantir que o DOM esteja atualizado
             } else {
                 const subtasksContainer = element.querySelector('.subtasks-container');
                 const expandBtn = element.querySelector('.expand-btn');
@@ -123,33 +129,10 @@
                     expandBtn.textContent = '−';
                     expandedTasks[key] = true;
                 }
+                setTimeout(() => {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 300); // Atraso para garantir que o DOM esteja atualizado
             }
-        }
-
-        function smoothScrollTo(top, duration) {
-            const start = window.pageYOffset;
-            const distance = top - start;
-            let startTime = null;
-
-            console.log(`Iniciando smoothScrollTo: de ${start} para ${top}, distância: ${distance}, duração: ${duration}ms`);
-
-            function animation(currentTime) {
-                if (startTime === null) startTime = currentTime;
-                const timeElapsed = currentTime - startTime;
-                const run = ease(timeElapsed, start, distance, duration);
-                window.scrollTo(0, run);
-                console.log(`Animação em andamento: tempo=${timeElapsed}, posição=${run}`);
-                if (timeElapsed < duration) requestAnimationFrame(animation);
-            }
-
-            function ease(t, b, c, d) {
-                t /= d / 2;
-                if (t < 1) return c / 2 * t * t + b;
-                t--;
-                return -c / 2 * (t * (t - 2) - 1) + b;
-            }
-
-            requestAnimationFrame(animation);
         }
 
         function scrollToInput() {
@@ -157,8 +140,12 @@
             const scrollPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
             console.log(`scrollToInput chamado: posição calculada=${scrollPosition}, posição atual=${window.pageYOffset}`);
             setTimeout(() => {
-                smoothScrollTo(scrollPosition, 500); // 500ms para animação suave
-            }, 200); // Atraso aumentado para garantir DOM pronto
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'smooth'
+                });
+                console.log(`Rolagem suave iniciada para ${scrollPosition}`);
+            }, 300); // Atraso aumentado para garantir DOM pronto
         }
 
         function saveTask(taskKey = null) {
@@ -360,8 +347,8 @@
             document.getElementById('priority').value = '';
             document.getElementById('actionButton').textContent = 'Adicionar Subtarefa';
             addingSubtaskToKey = { key, path };
-            scrollToInput(); // Adicionado para rolar até o campo de entrada
-            document.getElementById('taskInput').focus(); // Foco no campo
+            scrollToInput();
+            document.getElementById('taskInput').focus();
         }
 
         function editSubtask(parentKey, path, index) {

@@ -98,10 +98,10 @@
             console.log(`Elemento encontrado: ${key}`);
             document.getElementById('success').textContent = '';
 
+            let currentElement = element;
             if (path) {
                 const parts = path.split('/').filter(p => p !== '');
                 let currentPath = key;
-                let currentElement = element;
                 for (let i = 0; i < parts.length; i++) {
                     currentPath += `/${parts[i]}`;
                     const subtasksContainer = currentElement.querySelector('.subtasks-container');
@@ -111,16 +111,12 @@
                         expandBtn.textContent = '−';
                         expandedTasks[currentPath] = true;
                     }
-                    currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
+                    currentElement = subtasksContainer ? subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`) : null;
                     if (!currentElement) {
                         console.log(`Subtarefa não encontrada no path: ${currentPath}`);
                         break;
                     }
                 }
-                // Rolar para o elemento mais profundo encontrado
-                setTimeout(() => {
-                    currentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 300); // Atraso para garantir que o DOM esteja atualizado
             } else {
                 const subtasksContainer = element.querySelector('.subtasks-container');
                 const expandBtn = element.querySelector('.expand-btn');
@@ -129,10 +125,13 @@
                     expandBtn.textContent = '−';
                     expandedTasks[key] = true;
                 }
-                setTimeout(() => {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 300); // Atraso para garantir que o DOM esteja atualizado
             }
+
+            setTimeout(() => {
+                const targetElement = currentElement || element; // Usa o elemento mais profundo ou a raiz
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                console.log(`Rolagem concluída para ${targetElement === element ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
+            }, 500); // Atraso aumentado para garantir DOM atualizado
         }
 
         function scrollToInput() {
@@ -145,7 +144,7 @@
                     behavior: 'smooth'
                 });
                 console.log(`Rolagem suave iniciada para ${scrollPosition}`);
-            }, 300); // Atraso aumentado para garantir DOM pronto
+            }, 500); // Atraso aumentado para garantir DOM pronto
         }
 
         function saveTask(taskKey = null) {

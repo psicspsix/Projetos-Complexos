@@ -90,47 +90,53 @@
 
         function scrollToTarget(key, path = '', subtaskText = '') {
             console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
-            const element = document.querySelector(`li[data-key="${key}"]`);
-            if (!element) {
-                console.log(`Elemento NÃO encontrado: ${key}`);
+            const rootElement = document.querySelector(`li[data-key="${key}"]`);
+            if (!rootElement) {
+                console.log(`Elemento raiz NÃO encontrado: ${key}`);
                 return;
             }
             console.log(`Elemento raiz encontrado: ${key}`);
 
-            let currentElement = element;
+            let targetElement = rootElement;
             if (path) {
                 const parts = path.split('/').filter(p => p !== '');
-                let currentPath = key;
+                let currentPath = `${key}`;
+                let currentContainer = rootElement;
                 for (let i = 0; i < parts.length; i++) {
                     currentPath += `/${parts[i]}`;
-                    const subtasksContainer = currentElement.querySelector('.subtasks-container');
-                    const expandBtn = currentElement.querySelector('.expand-btn');
+                    const subtasksContainer = currentContainer.querySelector('.subtasks-container');
+                    const expandBtn = currentContainer.querySelector('.expand-btn');
                     if (subtasksContainer && expandBtn) {
                         subtasksContainer.classList.add('visible');
                         expandBtn.textContent = '−';
                         expandedTasks[currentPath] = true;
-                    }
-                    const subtaskElements = subtasksContainer ? Array.from(subtasksContainer.querySelectorAll('li[data-subtask-index]')) : [];
-                    const index = parseInt(parts[i]);
-                    currentElement = subtaskElements.find(el => parseInt(el.getAttribute('data-subtask-index')) === index);
-                    if (!currentElement) {
-                        console.log(`Subtarefa não encontrada no path: ${currentPath} para index ${index}`);
+                    } else {
+                        console.log(`Container ou botão de expansão não encontrado no path: ${currentPath}`);
                         break;
                     }
-                    console.log(`Subtarefa encontrada no path ${currentPath}: ${currentElement.querySelector('.task-text').textContent}`);
+                    const selector = `li[data-subtask-index="${parts[i]}"]`;
+                    targetElement = subtasksContainer.querySelector(selector);
+                    if (!targetElement) {
+                        console.log(`Subtarefa não encontrada no path: ${currentPath} para index ${parts[i]}`);
+                        break;
+                    }
+                    console.log(`Subtarefa encontrada no path ${currentPath}: ${targetElement.querySelector('.task-text').textContent}`);
+                    currentContainer = targetElement;
                 }
             }
 
             setTimeout(() => {
-                const targetElement = currentElement || element;
-                const rect = targetElement.getBoundingClientRect();
+                const finalElement = targetElement || rootElement;
+                const rect = finalElement.getBoundingClientRect();
                 const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
                 console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
-                window.scrollTo({
-                    top: scrollPosition,
-                    behavior: 'smooth'
+                requestAnimationFrame(() => {
+                    window.scrollTo({
+                        top: scrollPosition,
+                        behavior: 'smooth'
+                    });
+                    console.log(`Rolagem suave concluída para ${finalElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
                 });
-                console.log(`Rolagem suave concluída para ${targetElement === element ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
             }, 1500);
         }
 
@@ -139,12 +145,14 @@
             const scrollPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
             console.log(`scrollToInput chamado: posição calculada=${scrollPosition}, posição atual=${window.pageYOffset}`);
             setTimeout(() => {
-                window.scrollTo({
-                    top: scrollPosition,
-                    behavior: 'smooth'
+                requestAnimationFrame(() => {
+                    window.scrollTo({
+                        top: scrollPosition,
+                        behavior: 'smooth'
+                    });
+                    console.log(`Rolagem suave concluída para ${scrollPosition}`);
                 });
-                console.log(`Rolagem suave concluída para ${scrollPosition}`);
-            }, 300); // Aumentado para 300ms
+            }, 750); // Aumentado para 750ms
         }
 
         function saveTask(taskKey = null) {

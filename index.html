@@ -88,6 +88,28 @@
 
         console.log("Firebase conectado com sucesso!");
 
+        function expandPath(key, path) {
+            const parts = path.split('/').filter(p => p !== '');
+            let currentElement = document.querySelector(`li[data-key="${key}"]`);
+            let currentPath = key;
+            for (let i = 0; i < parts.length; i++) {
+                currentPath += `/${parts[i]}`;
+                const subtasksContainer = currentElement.querySelector('.subtasks-container');
+                const expandBtn = currentElement.querySelector('.expand-btn');
+                if (subtasksContainer && expandBtn) {
+                    subtasksContainer.classList.add('visible');
+                    expandBtn.textContent = '−';
+                    expandedTasks[currentPath] = true;
+                }
+                currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
+                if (!currentElement) {
+                    console.log(`Não foi possível expandir no path: ${currentPath}`);
+                    break;
+                }
+            }
+            return currentElement;
+        }
+
         function scrollToTarget(key, path = '', subtaskText = '') {
             console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
             const rootElement = document.querySelector(`li[data-key="${key}"]`);
@@ -99,29 +121,12 @@
 
             let targetElement = rootElement;
             if (path) {
-                const parts = path.split('/').filter(p => p !== '');
-                let currentPath = `${key}`;
-                let currentContainer = rootElement;
-                for (let i = 0; i < parts.length; i++) {
-                    currentPath += `/${parts[i]}`;
-                    const subtasksContainer = currentContainer.querySelector('.subtasks-container');
-                    const expandBtn = currentContainer.querySelector('.expand-btn');
-                    if (subtasksContainer && expandBtn) {
-                        subtasksContainer.classList.add('visible');
-                        expandBtn.textContent = '−';
-                        expandedTasks[currentPath] = true;
-                    } else {
-                        console.log(`Container ou botão de expansão não encontrado no path: ${currentPath}`);
-                        break;
-                    }
-                    const selector = `li[data-subtask-index="${parts[i]}"]`;
-                    targetElement = subtasksContainer.querySelector(selector);
-                    if (!targetElement) {
-                        console.log(`Subtarefa não encontrada no path: ${currentPath} para index ${parts[i]}`);
-                        break;
-                    }
-                    console.log(`Subtarefa encontrada no path ${currentPath}: ${targetElement.querySelector('.task-text').textContent}`);
-                    currentContainer = targetElement;
+                targetElement = expandPath(key, path);
+                if (!targetElement) {
+                    console.log(`Falha ao localizar elemento no path completo: ${key}/${path}`);
+                    targetElement = rootElement; // Fallback para raiz
+                } else {
+                    console.log(`Elemento encontrado no path completo: ${targetElement.querySelector('.task-text').textContent}`);
                 }
             }
 
@@ -130,14 +135,12 @@
                 const rect = finalElement.getBoundingClientRect();
                 const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
                 console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
-                requestAnimationFrame(() => {
-                    window.scrollTo({
-                        top: scrollPosition,
-                        behavior: 'smooth'
-                    });
-                    console.log(`Rolagem suave concluída para ${finalElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'smooth'
                 });
-            }, 1500);
+                console.log(`Rolagem suave concluída para ${finalElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
+            }, 2000); // Aumentado para 2000ms
         }
 
         function scrollToInput() {
@@ -145,14 +148,22 @@
             const scrollPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
             console.log(`scrollToInput chamado: posição calculada=${scrollPosition}, posição atual=${window.pageYOffset}`);
             setTimeout(() => {
-                requestAnimationFrame(() => {
-                    window.scrollTo({
-                        top: scrollPosition,
-                        behavior: 'smooth'
-                    });
-                    console.log(`Rolagem suave concluída para ${scrollPosition}`);
+                const currentPosition = window.pageYOffset;
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'smooth'
                 });
-            }, 750); // Aumentado para 750ms
+                setTimeout(() => {
+                    if (Math.abs(window.pageYOffset - scrollPosition) > 10) {
+                        console.log(`Rolagem falhou, tentando novamente: atual=${window.pageYOffset}, esperado=${scrollPosition}`);
+                        window.scrollTo({
+                            top: scrollPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                    console.log(`Rolagem suave concluída para ${scrollPosition}`);
+                }, 500);
+            }, 1000); // Aumentado para 1000ms
         }
 
         function saveTask(taskKey = null) {

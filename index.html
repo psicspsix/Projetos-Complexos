@@ -111,13 +111,10 @@
                         expandedTasks[currentPath] = true;
                     }
                     const subtaskElements = subtasksContainer ? Array.from(subtasksContainer.querySelectorAll('li[data-subtask-index]')) : [];
-                    currentElement = subtaskElements.find(el => el.getAttribute('data-subtask-index') === parts[i]) || 
-                                    (subtaskText ? subtaskElements.find(el => {
-                                        const textElement = el.querySelector('.task-text');
-                                        return textElement && textElement.textContent.split(' | ')[0] === subtaskText;
-                                    }) : null);
+                    const index = parseInt(parts[i]);
+                    currentElement = subtaskElements.find(el => parseInt(el.getAttribute('data-subtask-index')) === index);
                     if (!currentElement) {
-                        console.log(`Subtarefa não encontrada no path: ${currentPath}`);
+                        console.log(`Subtarefa não encontrada no path: ${currentPath} para index ${index}`);
                         break;
                     }
                     console.log(`Subtarefa encontrada no path ${currentPath}: ${currentElement.querySelector('.task-text').textContent}`);
@@ -146,8 +143,8 @@
                     top: scrollPosition,
                     behavior: 'smooth'
                 });
-                console.log(`Rolagem suave iniciada para ${scrollPosition}`);
-            }, 100);
+                console.log(`Rolagem suave concluída para ${scrollPosition}`);
+            }, 300); // Aumentado para 300ms
         }
 
         function saveTask(taskKey = null) {

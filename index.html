@@ -111,7 +111,8 @@
                         expandBtn.textContent = '−';
                         expandedTasks[currentPath] = true;
                     }
-                    currentElement = subtasksContainer ? subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`) : null;
+                    const subtaskElements = subtasksContainer ? Array.from(subtasksContainer.querySelectorAll('li[data-subtask-index]')) : [];
+                    currentElement = subtaskElements.find(el => el.getAttribute('data-subtask-index') === parts[i]) || null;
                     if (!currentElement) {
                         console.log(`Subtarefa não encontrada no path: ${currentPath}`);
                         break;
@@ -129,9 +130,9 @@
 
             setTimeout(() => {
                 const targetElement = currentElement || element; // Usa o elemento mais profundo ou a raiz
-                targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 console.log(`Rolagem concluída para ${targetElement === element ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
-            }, 500); // Atraso aumentado para garantir DOM atualizado
+            }, 1000); // Atraso aumentado para garantir DOM atualizado
         }
 
         function scrollToInput() {
@@ -144,7 +145,7 @@
                     behavior: 'smooth'
                 });
                 console.log(`Rolagem suave iniciada para ${scrollPosition}`);
-            }, 500); // Atraso aumentado para garantir DOM pronto
+            }, 500); // Atraso para garantir DOM pronto
         }
 
         function saveTask(taskKey = null) {
@@ -203,7 +204,8 @@
                     update(taskRef, task).then(() => {
                         resetForm();
                         document.getElementById('success').textContent = "Subtarefa atualizada com sucesso!";
-                        scrollToTarget(parentKey, path);
+                        const fullPath = path ? `${path}/${index}` : `${index}`;
+                        scrollToTarget(parentKey, fullPath);
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao atualizar subtarefa: " + error.message;
                         console.error("Erro ao atualizar subtarefa:", error);

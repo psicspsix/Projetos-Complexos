@@ -88,43 +88,79 @@
 
         console.log("Firebase conectado com sucesso!");
 
+        // Função auxiliar para atraso
         function wait(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
-        async function expandPath(key, path) {
+        // Rolagem suave manual para o input
+        function scrollToInput() {
+            const taskInput = document.getElementById('taskInput');
+            const targetPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
+            const startPosition = window.pageYOffset;
+            const distance = targetPosition - startPosition;
+            const duration = 1000; // 1 segundo
+            let startTime = null;
+
+            console.log(`scrollToInput chamado: posição calculada=${targetPosition}, posição atual=${startPosition}`);
+
+            function animateScroll(currentTime) {
+                if (!startTime) startTime = currentTime;
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const ease = progress * (2 - progress); // Ease-in-out
+                window.scrollTo(0, startPosition + distance * ease);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateScroll);
+                } else {
+                    console.log(`Rolagem suave concluída para ${targetPosition}`);
+                }
+            }
+
+            requestAnimationFrame(animateScroll);
+        }
+
+        // Expansão de caminho com retry
+        async function expandPath(key, path, maxRetries = 5) {
             const parts = path.split('/').filter(p => p !== '');
             let currentElement = document.querySelector(`li[data-key="${key}"]`);
             let currentPath = key;
 
             for (let i = 0; i < parts.length; i++) {
-                await wait(100); // Espera para garantir renderização
-                currentPath += `/${parts[i]}`;
-                const subtasksContainer = currentElement.querySelector('.subtasks-container');
-                const expandBtn = currentElement.querySelector('.expand-btn');
-                
-                if (subtasksContainer && expandBtn) {
-                    if (!subtasksContainer.classList.contains('visible')) {
-                        subtasksContainer.classList.add('visible');
-                        expandBtn.textContent = '−';
-                        expandedTasks[currentPath] = true;
+                let retries = 0;
+                while (retries < maxRetries) {
+                    await wait(200); // 200ms por tentativa
+                    const subtasksContainer = currentElement.querySelector('.subtasks-container');
+                    const expandBtn = currentElement.querySelector('.expand-btn');
+
+                    if (subtasksContainer && expandBtn) {
+                        if (!subtasksContainer.classList.contains('visible')) {
+                            subtasksContainer.classList.add('visible');
+                            expandBtn.textContent = '−';
+                            expandedTasks[currentPath] = true;
+                        }
+                        currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
+                        if (currentElement) {
+                            currentPath += `/${parts[i]}`;
+                            break; // Sucesso, prosseguir para o próximo nível
+                        }
                     }
-                    currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
-                    if (!currentElement) {
-                        console.log(`Elemento não encontrado no path: ${currentPath}`);
-                        return null;
-                    }
-                } else {
-                    console.log(`Não foi possível expandir no path: ${currentPath}`);
+                    retries++;
+                    console.log(`Tentativa ${retries} de expandir ${currentPath}`);
+                }
+                if (retries === maxRetries) {
+                    console.log(`Não foi possível expandir no path após ${maxRetries} tentativas: ${currentPath}`);
                     return null;
                 }
             }
             return currentElement;
         }
 
+        // Rolagem para o alvo com atraso maior
         async function scrollToTarget(key, path = '', subtaskText = '') {
             console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
-            await wait(500); // Espera a renderização completa após Firebase
+            await wait(1000); // 1 segundo para garantir renderização
             const rootElement = document.querySelector(`li[data-key="${key}"]`);
             if (!rootElement) {
                 console.log(`Elemento raiz NÃO encontrado: ${key}`);
@@ -152,17 +188,6 @@
             });
             await wait(1000); // Espera a rolagem concluir
             console.log(`Rolagem suave concluída para ${targetElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
-        }
-
-        function scrollToInput() {
-            const taskInput = document.getElementById('taskInput');
-            const targetPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
-            console.log(`scrollToInput chamado: posição calculada=${targetPosition}, posição atual=${window.pageYOffset}`);
-            window.scrollTo({
-                top: targetPosition,
-                behavior: 'smooth'
-            });
-            setTimeout(() => console.log(`Rolagem suave concluída para ${targetPosition}`), 1000);
         }
 
         function saveTask(taskKey = null) {

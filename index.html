@@ -89,14 +89,13 @@
         console.log("Firebase conectado com sucesso!");
 
         function scrollToTarget(key, path = '', subtaskText = '') {
-            console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: ${subtaskText}`);
+            console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
             const element = document.querySelector(`li[data-key="${key}"]`);
             if (!element) {
                 console.log(`Elemento NÃO encontrado: ${key}`);
                 return;
             }
-            console.log(`Elemento encontrado: ${key}`);
-            document.getElementById('success').textContent = '';
+            console.log(`Elemento raiz encontrado: ${key}`);
 
             let currentElement = element;
             if (path) {
@@ -113,11 +112,15 @@
                     }
                     const subtaskElements = subtasksContainer ? Array.from(subtasksContainer.querySelectorAll('li[data-subtask-index]')) : [];
                     currentElement = subtaskElements.find(el => el.getAttribute('data-subtask-index') === parts[i]) || 
-                                    (subtaskText ? subtaskElements.find(el => el.querySelector('.task-text').textContent.includes(subtaskText)) : null);
+                                    (subtaskText ? subtaskElements.find(el => {
+                                        const textElement = el.querySelector('.task-text');
+                                        return textElement && textElement.textContent.split(' | ')[0] === subtaskText;
+                                    }) : null);
                     if (!currentElement) {
                         console.log(`Subtarefa não encontrada no path: ${currentPath}`);
                         break;
                     }
+                    console.log(`Subtarefa encontrada no path ${currentPath}: ${currentElement.querySelector('.task-text').textContent}`);
                 }
             }
 
@@ -125,23 +128,26 @@
                 const targetElement = currentElement || element;
                 const rect = targetElement.getBoundingClientRect();
                 const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
+                console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
                 window.scrollTo({
                     top: scrollPosition,
                     behavior: 'smooth'
                 });
                 console.log(`Rolagem suave concluída para ${targetElement === element ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
-            }, 1500); // Atraso aumentado para garantir DOM
+            }, 1500);
         }
 
         function scrollToInput() {
             const taskInput = document.getElementById('taskInput');
             const scrollPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
             console.log(`scrollToInput chamado: posição calculada=${scrollPosition}, posição atual=${window.pageYOffset}`);
-            window.scrollTo({
-                top: scrollPosition,
-                behavior: 'smooth'
-            });
-            console.log(`Rolagem suave iniciada para ${scrollPosition}`);
+            setTimeout(() => {
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'smooth'
+                });
+                console.log(`Rolagem suave iniciada para ${scrollPosition}`);
+            }, 100);
         }
 
         function saveTask(taskKey = null) {

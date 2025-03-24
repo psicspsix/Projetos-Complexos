@@ -121,7 +121,7 @@
             requestAnimationFrame(animateScroll);
         }
 
-        // Expansão de caminho com retry
+        // Expansão de caminho com retry mais longo
         async function expandPath(key, path, maxRetries = 5) {
             const parts = path.split('/').filter(p => p !== '');
             let currentElement = document.querySelector(`li[data-key="${key}"]`);
@@ -130,7 +130,7 @@
             for (let i = 0; i < parts.length; i++) {
                 let retries = 0;
                 while (retries < maxRetries) {
-                    await wait(200); // 200ms por tentativa
+                    await wait(500); // Aumentado para 500ms por tentativa
                     const subtasksContainer = currentElement.querySelector('.subtasks-container');
                     const expandBtn = currentElement.querySelector('.expand-btn');
 
@@ -157,10 +157,13 @@
             return currentElement;
         }
 
-        // Rolagem para o alvo com atraso maior
+        // Rolagem para o alvo com renderização forçada
         async function scrollToTarget(key, path = '', subtaskText = '') {
             console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
-            await wait(1000); // 1 segundo para garantir renderização
+            await wait(1000); // Atraso inicial para sincronização com Firebase
+            renderTasks(); // Forçar renderização antes de tentar rolar
+            await wait(500); // Aguardar a renderização completar
+
             const rootElement = document.querySelector(`li[data-key="${key}"]`);
             if (!rootElement) {
                 console.log(`Elemento raiz NÃO encontrado: ${key}`);

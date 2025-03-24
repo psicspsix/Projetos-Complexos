@@ -121,61 +121,39 @@
             requestAnimationFrame(animateScroll);
         }
 
-        // Forçar expansão manual de todos os níveis do caminho com retries
+        // Forçar expansão manual de todos os níveis do caminho
         async function forceExpandPath(key, path) {
             const parts = path.split('/').filter(p => p !== '');
             let currentElement = document.querySelector(`li[data-key="${key}"]`);
             let currentPath = key;
-            const maxRetries = 5;
 
             for (let i = 0; i < parts.length; i++) {
-                let retries = 0;
-                let subtasksContainer = null;
-                let expandBtn = null;
+                await wait(500); // Atraso para garantir renderização
+                const subtasksContainer = currentElement.querySelector('.subtasks-container');
+                const expandBtn = currentElement.querySelector('.expand-btn');
 
-                while (retries < maxRetries) {
-                    await wait(1000); // Aumentado para 1s por tentativa
-                    subtasksContainer = currentElement.querySelector('.subtasks-container');
-                    expandBtn = currentElement.querySelector('.expand-btn');
-
-                    if (subtasksContainer && expandBtn) {
-                        if (!subtasksContainer.classList.contains('visible')) {
-                            subtasksContainer.classList.add('visible');
-                            expandBtn.textContent = '−';
-                            expandedTasks[currentPath] = true;
-                            console.log(`Expandido manualmente: ${currentPath}`);
-                        }
-                        break;
-                    }
-                    console.log(`Tentativa ${retries + 1} de expandir ${currentPath} falhou, esperando DOM...`);
-                    retries++;
-                    renderTasks(); // Forçar re-renderização
+                if (subtasksContainer && expandBtn && !subtasksContainer.classList.contains('visible')) {
+                    subtasksContainer.classList.add('visible');
+                    expandBtn.textContent = '−';
+                    expandedTasks[currentPath] = true;
+                    console.log(`Expandido manualmente: ${currentPath}`);
                 }
-
-                if (!subtasksContainer || !expandBtn) {
-                    console.log(`Elemento não encontrado após ${maxRetries} tentativas no path: ${currentPath}`);
-                    return null;
-                }
-
-                const subtaskIndex = parseInt(parts[i]);
-                currentElement = Array.from(subtasksContainer.querySelectorAll('li[data-subtask-index]'))
-                    .find(li => parseInt(li.getAttribute('data-subtask-index')) === subtaskIndex);
-
+                currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
                 if (!currentElement) {
-                    console.log(`Subtarefa com índice ${subtaskIndex} não encontrada no path: ${currentPath}`);
+                    console.log(`Elemento não encontrado no path: ${currentPath}/${parts[i]}`);
                     return null;
                 }
-                currentPath += `/${subtaskIndex}`;
+                currentPath += `/${parts[i]}`;
             }
             return currentElement;
         }
 
-        // Rolagem para o alvo com atrasos maiores e fallback para o pai
+        // Rolagem para o alvo com atrasos maiores e expansão forçada
         async function scrollToTarget(key, path = '', subtaskText = '') {
             console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
-            await wait(3000); // Aumentado para 3s para sincronização com Firebase
-            renderTasks(); // Forçar renderização inicial
-            await wait(1000); // 1s após renderização
+            await wait(2000); // Aumentado para 2s para sincronização com Firebase
+            renderTasks(); // Forçar renderização
+            await wait(1000); // Aumentado para 1s após renderização
 
             const rootElement = document.querySelector(`li[data-key="${key}"]`);
             if (!rootElement) {
@@ -185,32 +163,25 @@
             console.log(`Elemento raiz encontrado: ${key}`);
 
             let targetElement = rootElement;
-            let parentElement = rootElement;
             if (path) {
                 targetElement = await forceExpandPath(key, path);
                 if (!targetElement) {
                     console.log(`Falha ao localizar elemento no path completo: ${key}/${path}`);
-                    const parts = path.split('/').filter(p => p !== '');
-                    if (parts.length > 1) {
-                        const parentPath = parts.slice(0, -1).join('/');
-                        parentElement = await forceExpandPath(key, parentPath) || rootElement;
-                        console.log(`Usando fallback para o pai no path: ${key}/${parentPath}`);
-                    }
-                    targetElement = parentElement; // Fallback para o pai ou raiz
+                    targetElement = rootElement; // Fallback para raiz
                 } else {
                     console.log(`Elemento encontrado no path completo: ${targetElement.querySelector('.task-text').textContent}`);
                 }
             }
 
             const rect = targetElement.getBoundingClientRect();
-            const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 8) + (rect.height / 2); // Ajustado para descer mais
+            const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 4) + (rect.height / 2); // Ajustado para descer mais
             console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
             window.scrollTo({
                 top: scrollPosition,
                 behavior: 'smooth'
             });
             await wait(1000); // Espera a rolagem concluir
-            console.log(`Rolagem suave concluída para ${targetElement === rootElement ? 'raiz' : (targetElement === parentElement ? 'pai' : 'subtarefa')} em ${key}/${path}`);
+            console.log(`Rolagem suave concluída para ${targetElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
         }
 
         function saveTask(taskKey = null) {

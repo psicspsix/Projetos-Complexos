@@ -121,48 +121,39 @@
             requestAnimationFrame(animateScroll);
         }
 
-        // Expansão de caminho com retry mais longo
-        async function expandPath(key, path, maxRetries = 5) {
+        // Forçar expansão manual de todos os níveis do caminho
+        async function forceExpandPath(key, path) {
             const parts = path.split('/').filter(p => p !== '');
             let currentElement = document.querySelector(`li[data-key="${key}"]`);
             let currentPath = key;
 
             for (let i = 0; i < parts.length; i++) {
-                let retries = 0;
-                while (retries < maxRetries) {
-                    await wait(500); // Aumentado para 500ms por tentativa
-                    const subtasksContainer = currentElement.querySelector('.subtasks-container');
-                    const expandBtn = currentElement.querySelector('.expand-btn');
+                await wait(500); // Atraso para garantir renderização
+                const subtasksContainer = currentElement.querySelector('.subtasks-container');
+                const expandBtn = currentElement.querySelector('.expand-btn');
 
-                    if (subtasksContainer && expandBtn) {
-                        if (!subtasksContainer.classList.contains('visible')) {
-                            subtasksContainer.classList.add('visible');
-                            expandBtn.textContent = '−';
-                            expandedTasks[currentPath] = true;
-                        }
-                        currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
-                        if (currentElement) {
-                            currentPath += `/${parts[i]}`;
-                            break; // Sucesso, prosseguir para o próximo nível
-                        }
-                    }
-                    retries++;
-                    console.log(`Tentativa ${retries} de expandir ${currentPath}`);
+                if (subtasksContainer && expandBtn && !subtasksContainer.classList.contains('visible')) {
+                    subtasksContainer.classList.add('visible');
+                    expandBtn.textContent = '−';
+                    expandedTasks[currentPath] = true;
+                    console.log(`Expandido manualmente: ${currentPath}`);
                 }
-                if (retries === maxRetries) {
-                    console.log(`Não foi possível expandir no path após ${maxRetries} tentativas: ${currentPath}`);
+                currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
+                if (!currentElement) {
+                    console.log(`Elemento não encontrado no path: ${currentPath}/${parts[i]}`);
                     return null;
                 }
+                currentPath += `/${parts[i]}`;
             }
             return currentElement;
         }
 
-        // Rolagem para o alvo com renderização forçada
+        // Rolagem para o alvo com atrasos maiores e expansão forçada
         async function scrollToTarget(key, path = '', subtaskText = '') {
             console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
-            await wait(1000); // Atraso inicial para sincronização com Firebase
-            renderTasks(); // Forçar renderização antes de tentar rolar
-            await wait(500); // Aguardar a renderização completar
+            await wait(2000); // Aumentado para 2s para sincronização com Firebase
+            renderTasks(); // Forçar renderização
+            await wait(1000); // Aumentado para 1s após renderização
 
             const rootElement = document.querySelector(`li[data-key="${key}"]`);
             if (!rootElement) {
@@ -173,7 +164,7 @@
 
             let targetElement = rootElement;
             if (path) {
-                targetElement = await expandPath(key, path);
+                targetElement = await forceExpandPath(key, path);
                 if (!targetElement) {
                     console.log(`Falha ao localizar elemento no path completo: ${key}/${path}`);
                     targetElement = rootElement; // Fallback para raiz
@@ -183,7 +174,7 @@
             }
 
             const rect = targetElement.getBoundingClientRect();
-            const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
+            const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 4) + (rect.height / 2); // Ajustado para descer mais
             console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
             window.scrollTo({
                 top: scrollPosition,

@@ -83,7 +83,6 @@
         let editingSubtask = null;
         let addingSubtaskToKey = null;
         let currentCategory = 'mainProjects';
-        let expandedTasks = {};
         let targetTaskKey = null;
 
         // Função de log simples
@@ -157,7 +156,7 @@
                     if (subtasksContainer && expandBtn && !subtasksContainer.classList.contains('visible')) {
                         subtasksContainer.classList.add('visible');
                         expandBtn.textContent = '−';
-                        expandedTasks[currentPath] = true;
+                        updateExpansionState(key, currentPath, true); // Persistir expansão
                         log(`Expandido: ${currentPath}`);
                         await wait(100); // Pequeno atraso para animação
                     }
@@ -190,6 +189,27 @@
             } else {
                 log(`Falha ao rolar: elemento não encontrado para key=${key}, path=${path}`);
             }
+        }
+
+        // Função para atualizar o estado de expansão no Firebase
+        function updateExpansionState(key, path, isExpanded) {
+            const taskRef = ref(db, `tasks/${key}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                if (!path) {
+                    task.expanded = isExpanded;
+                } else {
+                    const parts = path.split('/').filter(p => p !== '').slice(1); // Remove a chave raiz
+                    let current = task;
+                    for (const index of parts) {
+                        current = current.subtasks[parseInt(index)];
+                    }
+                    current.expanded = isExpanded;
+                }
+                update(taskRef, task)
+                    .then(() => log(`Estado de expansão atualizado para ${path || key}: ${isExpanded}`))
+                    .catch(error => log(`Erro ao atualizar estado de expansão: ${error.message}`));
+            }, { onlyOnce: true });
         }
 
         function saveTask(taskKey = null) {
@@ -242,14 +262,15 @@
                         priority: Math.min(Math.max(priority, 1), 1000),
                         notes: subtasks[index].notes || "",
                         completed: subtasks[index].completed || false,
-                        subtasks: subtasks[index].subtasks || []
+                        subtasks: subtasks[index].subtasks || [],
+                        expanded: subtasks[index].expanded || false // Preserva o estado de expansão
                     };
                     log(`Subtarefa atualizada: ${JSON.stringify(subtasks[index])}`);
                     update(taskRef, task).then(() => {
                         document.getElementById('success').textContent = "Subtarefa atualizada com sucesso!";
                         const fullPath = path ? `${path}/${index}` : `${index}`;
-                        scrollToTarget(parentKey, fullPath); // Rolagem antes do reset
-                        resetForm(); // Reset após rolagem
+                        scrollToTarget(parentKey, fullPath);
+                        resetForm();
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao atualizar subtarefa: " + error.message;
                         log(`Erro ao atualizar subtarefa: ${error.message}`);
@@ -276,7 +297,8 @@
                         priority: Math.min(Math.max(priority, 1), 1000),
                         notes: "",
                         completed: false,
-                        subtasks: []
+                        subtasks: [],
+                        expanded: false // Novo campo para subtarefas
                     };
 
                     let newIndex;
@@ -304,8 +326,8 @@
                     update(taskRef, task).then(() => {
                         document.getElementById('success').textContent = "Subtarefa adicionada com sucesso!";
                         const newPath = path ? `${path}/${newIndex}` : `${newIndex}`;
-                        scrollToTarget(key, newPath); // Rolagem antes do reset
-                        resetForm(); // Reset após rolagem
+                        scrollToTarget(key, newPath);
+                        resetForm();
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao adicionar subtarefa: " + error.message;
                         log(`Erro ao adicionar subtarefa: ${error.message}`);
@@ -323,12 +345,13 @@
                         notes: currentTask.notes || "",
                         completed: currentTask.completed || false,
                         category: currentCategory,
-                        subtasks: currentTask.subtasks || []
+                        subtasks: currentTask.subtasks || [],
+                        expanded: currentTask.expanded || false // Preserva o estado de expansão
                     };
                     set(taskRef, updatedTask).then(() => {
                         document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
-                        scrollToTarget(editingTaskKey); // Rolagem antes do reset
-                        resetForm(); // Reset após rolagem
+                        scrollToTarget(editingTaskKey);
+                        resetForm();
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
                         log(`Erro ao atualizar tarefa: ${error.message}`);
@@ -343,11 +366,12 @@
                     notes: "",
                     completed: false,
                     category: currentCategory,
-                    subtasks: []
+                    subtasks: [],
+                    expanded: false // Novo campo para tarefas
                 }).then((newTaskRef) => {
                     document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
-                    scrollToTarget(newTaskRef.key); // Rolagem antes do reset
-                    resetForm(); // Reset após rolagem
+                    scrollToTarget(newTaskRef.key);
+                    resetForm();
                 }).catch((error) => {
                     document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
                     log(`Erro ao adicionar tarefa: ${error.message}`);
@@ -494,15 +518,15 @@
             const fullPath = path ? `${key}/${path}` : key;
             const subtasksContainer = li.querySelector('.subtasks-container');
             const expandBtn = li.querySelector('.expand-btn');
-            if (subtasksContainer.classList.contains('visible')) {
-                subtasksContainer.classList.remove('visible');
-                expandBtn.textContent = '+';
-                expandedTasks[fullPath] = false;
-            } else {
+            const isExpanded = !subtasksContainer.classList.contains('visible');
+            if (isExpanded) {
                 subtasksContainer.classList.add('visible');
                 expandBtn.textContent = '−';
-                expandedTasks[fullPath] = true;
+            } else {
+                subtasksContainer.classList.remove('visible');
+                expandBtn.textContent = '+';
             }
+            updateExpansionState(key, fullPath, isExpanded); // Persistir o estado
         }
 
         function changeCategory(key, newCategory) {
@@ -622,7 +646,7 @@
                 const fullPath = `${key}/${subPath}`;
                 const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
                 const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
-                const isExpanded = expandedTasks[fullPath];
+                const isExpanded = subtask.expanded || false; // Usar o estado persistido
 
                 subLi.innerHTML = `
                     <div class="task-row">
@@ -718,11 +742,11 @@
                     li.className = task.completed ? 'completed' : '';
                     const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
                     const hasSubtasks = task.subtasks && task.subtasks.length > 0;
-                    if (shouldExpandTask(task)) expandedTasks[key] = true;
+                    const isExpanded = task.expanded || false; // Usar o estado persistido
 
                     li.innerHTML = `
                         <div class="task-row">
-                            ${hasSubtasks ? `<button class="expand-btn">${expandedTasks[key] ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
+                            ${hasSubtasks ? `<button class="expand-btn">${isExpanded ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
                             <input type="checkbox" ${task.completed ? 'checked' : ''} data-id="${key}">
                             <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                             <div class="category-dropdown">
@@ -742,7 +766,7 @@
                         <div class="notes">
                             <textarea rows="3">${task.notes || ''}</textarea>
                         </div>
-                        <div class="subtasks-container ${expandedTasks[key] ? 'visible' : ''}"></div>
+                        <div class="subtasks-container ${isExpanded ? 'visible' : ''}"></div>
                     `;
 
                     const subtasksContainer = li.querySelector('.subtasks-container');

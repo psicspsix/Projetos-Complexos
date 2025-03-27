@@ -86,7 +86,12 @@
         let expandedTasks = {};
         let targetTaskKey = null;
 
-        console.log("Firebase conectado com sucesso!");
+        // Função de log simples
+        function log(message) {
+            console.log(`[LOG ${new Date().toLocaleTimeString()}]: ${message}`);
+        }
+
+        log("Firebase conectado com sucesso!");
 
         // Função auxiliar para atraso
         function wait(ms) {
@@ -102,7 +107,7 @@
             const duration = 1000; // 1 segundo
             let startTime = null;
 
-            console.log(`scrollToInput chamado: posição calculada=${targetPosition}, posição atual=${startPosition}`);
+            log(`Iniciando rolagem para o input: posição calculada=${targetPosition}, posição atual=${startPosition}`);
 
             function animateScroll(currentTime) {
                 if (!startTime) startTime = currentTime;
@@ -114,74 +119,77 @@
                 if (progress < 1) {
                     requestAnimationFrame(animateScroll);
                 } else {
-                    console.log(`Rolagem suave concluída para ${targetPosition}`);
+                    log(`Rolagem para o input concluída: posição=${targetPosition}`);
                 }
             }
 
             requestAnimationFrame(animateScroll);
         }
 
-        // Forçar expansão manual de todos os níveis do caminho
-        async function forceExpandPath(key, path) {
-            const parts = path.split('/').filter(p => p !== '');
-            let currentElement = document.querySelector(`li[data-key="${key}"]`);
-            let currentPath = key;
+        // Expandir todos os níveis até o elemento alvo e rolar suavemente
+        async function scrollToTarget(key, path = '') {
+            log(`Iniciando scrollToTarget para key=${key}, path=${path}`);
 
-            for (let i = 0; i < parts.length; i++) {
-                await wait(500); // Atraso para garantir renderização
-                const subtasksContainer = currentElement.querySelector('.subtasks-container');
-                const expandBtn = currentElement.querySelector('.expand-btn');
+            // Aguardar atualização do Firebase e renderização
+            await wait(500);
 
-                if (subtasksContainer && expandBtn && !subtasksContainer.classList.contains('visible')) {
-                    subtasksContainer.classList.add('visible');
-                    expandBtn.textContent = '−';
-                    expandedTasks[currentPath] = true;
-                    console.log(`Expandido manualmente: ${currentPath}`);
-                }
-                currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${parts[i]}"]`);
-                if (!currentElement) {
-                    console.log(`Elemento não encontrado no path: ${currentPath}/${parts[i]}`);
+            // Função para encontrar e expandir o elemento
+            const expandAndFindElement = async () => {
+                const rootElement = document.querySelector(`li[data-key="${key}"]`);
+                if (!rootElement) {
+                    log(`Erro: Elemento raiz não encontrado para key=${key}`);
                     return null;
                 }
-                currentPath += `/${parts[i]}`;
-            }
-            return currentElement;
-        }
+                log(`Elemento raiz encontrado: key=${key}`);
 
-        // Rolagem para o alvo com atrasos maiores e expansão forçada
-        async function scrollToTarget(key, path = '', subtaskText = '') {
-            console.log(`Tentando rolar para: ${key}, path: ${path}, subtaskText: "${subtaskText}"`);
-            await wait(2000); // Aumentado para 2s para sincronização com Firebase
-            renderTasks(); // Forçar renderização
-            await wait(1000); // Aumentado para 1s após renderização
-
-            const rootElement = document.querySelector(`li[data-key="${key}"]`);
-            if (!rootElement) {
-                console.log(`Elemento raiz NÃO encontrado: ${key}`);
-                return;
-            }
-            console.log(`Elemento raiz encontrado: ${key}`);
-
-            let targetElement = rootElement;
-            if (path) {
-                targetElement = await forceExpandPath(key, path);
-                if (!targetElement) {
-                    console.log(`Falha ao localizar elemento no path completo: ${key}/${path}`);
-                    targetElement = rootElement; // Fallback para raiz
-                } else {
-                    console.log(`Elemento encontrado no path completo: ${targetElement.querySelector('.task-text').textContent}`);
+                if (!path) {
+                    return rootElement;
                 }
-            }
 
-            const rect = targetElement.getBoundingClientRect();
-            const scrollPosition = rect.top + window.pageYOffset - (window.innerHeight / 4) + (rect.height / 2); // Ajustado para descer mais
-            console.log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
-            window.scrollTo({
-                top: scrollPosition,
-                behavior: 'smooth'
-            });
-            await wait(1000); // Espera a rolagem concluir
-            console.log(`Rolagem suave concluída para ${targetElement === rootElement ? 'raiz' : 'subtarefa'} em ${key}/${path}`);
+                const parts = path.split('/').filter(p => p !== '');
+                let currentElement = rootElement;
+                let currentPath = key;
+
+                for (const part of parts) {
+                    const subtasksContainer = currentElement.querySelector('.subtasks-container');
+                    const expandBtn = currentElement.querySelector('.expand-btn');
+
+                    if (subtasksContainer && expandBtn && !subtasksContainer.classList.contains('visible')) {
+                        subtasksContainer.classList.add('visible');
+                        expandBtn.textContent = '−';
+                        expandedTasks[currentPath] = true;
+                        log(`Expandido: ${currentPath}`);
+                        await wait(100); // Pequeno atraso para animação
+                    }
+
+                    currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${part}"]`);
+                    if (!currentElement) {
+                        log(`Erro: Subtarefa não encontrada no path=${currentPath}/${part}`);
+                        return rootElement; // Fallback para a raiz
+                    }
+                    currentPath += `/${part}`;
+                }
+
+                return currentElement;
+            };
+
+            const targetElement = await expandAndFindElement();
+            if (targetElement) {
+                const rect = targetElement.getBoundingClientRect();
+                const scrollPosition = rect.top + window.pageYOffset - 50; // Offset para visibilidade
+                log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
+
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'smooth'
+                });
+
+                // Aguardar a rolagem terminar
+                await wait(1000);
+                log(`Rolagem concluída para ${path ? `subtarefa em ${key}/${path}` : `tarefa em ${key}`}`);
+            } else {
+                log(`Falha ao rolar: elemento não encontrado para key=${key}, path=${path}`);
+            }
         }
 
         function saveTask(taskKey = null) {
@@ -192,27 +200,27 @@
             let dueDate = dueDateInput.value || null;
             const priority = parseInt(priorityInput.value) || 1;
 
-            console.log("saveTask chamado com:", { taskKey, taskText, dueDate, priority, editingTaskKey, editingSubtask, addingSubtaskToKey });
+            log(`saveTask chamado: taskText="${taskText}", editingTaskKey=${editingTaskKey}, editingSubtask=${JSON.stringify(editingSubtask)}, addingSubtaskToKey=${JSON.stringify(addingSubtaskToKey)}`);
 
             if (taskText === '') {
                 document.getElementById('error').textContent = "Preencha a tarefa!";
-                console.log("Erro: Tarefa vazia");
+                log("Erro: Tarefa vazia");
                 return;
             }
 
             const validateSubtaskConstraints = (parentTask, newDueDate, newPriority) => {
                 if (!parentTask) {
-                    console.log("Erro: parentTask é undefined");
+                    log("Erro: parentTask é undefined");
                     return true;
                 }
                 if (newDueDate && parentTask.dueDate && newDueDate > parentTask.dueDate) {
                     document.getElementById('error').textContent = "Data da subtarefa não pode ser posterior à da tarefa!";
-                    console.log("Erro: Data da subtarefa posterior à tarefa");
+                    log("Erro: Data da subtarefa posterior à tarefa");
                     return false;
                 }
                 if (parentTask.priority !== undefined && newPriority > parentTask.priority) {
                     document.getElementById('error').textContent = "Prioridade da subtarefa não pode ser maior que a da tarefa!";
-                    console.log("Erro: Prioridade da subtarefa maior que a tarefa");
+                    log("Erro: Prioridade da subtarefa maior que a tarefa");
                     return false;
                 }
                 return true;
@@ -221,7 +229,7 @@
             if (editingSubtask) {
                 const { parentKey, path, index } = editingSubtask;
                 const taskRef = ref(db, `tasks/${parentKey}`);
-                console.log("Editando subtarefa:", { parentKey, path, index });
+                log(`Editando subtarefa: parentKey=${parentKey}, path=${path}, index=${index}`);
                 onValue(taskRef, (snapshot) => {
                     const task = snapshot.val();
                     const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
@@ -236,27 +244,26 @@
                         completed: subtasks[index].completed || false,
                         subtasks: subtasks[index].subtasks || []
                     };
-                    console.log("Atualizando subtarefa:", subtasks[index]);
+                    log(`Subtarefa atualizada: ${JSON.stringify(subtasks[index])}`);
                     update(taskRef, task).then(() => {
-                        resetForm();
                         document.getElementById('success').textContent = "Subtarefa atualizada com sucesso!";
                         const fullPath = path ? `${path}/${index}` : `${index}`;
-                        scrollToTarget(parentKey, fullPath, taskText);
+                        scrollToTarget(parentKey, fullPath); // Rolagem antes do reset
+                        resetForm(); // Reset após rolagem
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao atualizar subtarefa: " + error.message;
-                        console.error("Erro ao atualizar subtarefa:", error);
+                        log(`Erro ao atualizar subtarefa: ${error.message}`);
                     });
                 }, { onlyOnce: true });
             } else if (addingSubtaskToKey) {
                 const { key, path } = addingSubtaskToKey;
                 const taskRef = ref(db, `tasks/${key}`);
-                console.log("Adicionando subtarefa para:", { key, path });
+                log(`Adicionando subtarefa: key=${key}, path=${path}`);
                 onValue(taskRef, (snapshot) => {
                     const task = snapshot.val();
-                    console.log("Tarefa atual:", task);
                     if (!task) {
                         document.getElementById('error').textContent = "Tarefa pai não encontrada!";
-                        console.error("Tarefa pai não encontrada para key:", key);
+                        log(`Erro: Tarefa pai não encontrada para key=${key}`);
                         return;
                     }
 
@@ -293,22 +300,20 @@
                         }
                     }
 
-                    console.log("Nova subtarefa adicionada:", newSubtask);
-                    console.log("Tarefa atualizada:", task);
+                    log(`Nova subtarefa adicionada: ${JSON.stringify(newSubtask)}`);
                     update(taskRef, task).then(() => {
-                        resetForm();
                         document.getElementById('success').textContent = "Subtarefa adicionada com sucesso!";
-                        console.log("Subtarefa adicionada com sucesso para:", key);
                         const newPath = path ? `${path}/${newIndex}` : `${newIndex}`;
-                        scrollToTarget(key, newPath, taskText);
+                        scrollToTarget(key, newPath); // Rolagem antes do reset
+                        resetForm(); // Reset após rolagem
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao adicionar subtarefa: " + error.message;
-                        console.error("Erro ao adicionar subtarefa:", error);
+                        log(`Erro ao adicionar subtarefa: ${error.message}`);
                     });
                 }, { onlyOnce: true });
             } else if (editingTaskKey) {
                 const taskRef = ref(db, `tasks/${editingTaskKey}`);
-                console.log("Editando tarefa:", editingTaskKey);
+                log(`Editando tarefa: key=${editingTaskKey}`);
                 onValue(taskRef, (snapshot) => {
                     const currentTask = snapshot.val();
                     const updatedTask = {
@@ -321,16 +326,16 @@
                         subtasks: currentTask.subtasks || []
                     };
                     set(taskRef, updatedTask).then(() => {
-                        resetForm();
                         document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
-                        scrollToTarget(editingTaskKey);
+                        scrollToTarget(editingTaskKey); // Rolagem antes do reset
+                        resetForm(); // Reset após rolagem
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
-                        console.error("Erro ao atualizar tarefa:", error);
+                        log(`Erro ao atualizar tarefa: ${error.message}`);
                     });
                 }, { onlyOnce: true });
             } else {
-                console.log("Adicionando nova tarefa");
+                log("Adicionando nova tarefa");
                 push(tasksRef, {
                     text: taskText,
                     dueDate: dueDate,
@@ -340,13 +345,12 @@
                     category: currentCategory,
                     subtasks: []
                 }).then((newTaskRef) => {
-                    resetForm();
                     document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
-                    console.log("Tarefa adicionada com sucesso:", newTaskRef.key);
-                    scrollToTarget(newTaskRef.key);
+                    scrollToTarget(newTaskRef.key); // Rolagem antes do reset
+                    resetForm(); // Reset após rolagem
                 }).catch((error) => {
                     document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
-                    console.error("Erro ao adicionar tarefa:", error);
+                    log(`Erro ao adicionar tarefa: ${error.message}`);
                 });
             }
         }
@@ -360,7 +364,7 @@
             editingTaskKey = null;
             editingSubtask = null;
             addingSubtaskToKey = null;
-            console.log("Formulário resetado");
+            log("Formulário resetado");
         }
 
         function editTask(key) {
@@ -378,7 +382,7 @@
         }
 
         function addSubtask(key, path = '') {
-            console.log("Preparando para adicionar subtarefa em:", { parentKey: key, path });
+            log(`Preparando para adicionar subtarefa: parentKey=${key}, path=${path}`);
             document.getElementById('taskInput').value = '';
             document.getElementById('dueDate').value = '';
             document.getElementById('priority').value = '';
@@ -405,22 +409,21 @@
         }
 
         function toggleTask(key) {
-            console.log("toggleTask chamado com key:", key);
+            log(`toggleTask chamado: key=${key}`);
             const taskRef = ref(db, `tasks/${key}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
                 update(taskRef, { completed: !task.completed })
-                    .then(() => console.log(`Tarefa ${key} atualizada no Firebase: completed=${!task.completed}`))
-                    .catch(error => console.error("Erro ao atualizar tarefa:", error));
+                    .then(() => log(`Tarefa ${key} atualizada no Firebase: completed=${!task.completed}`))
+                    .catch(error => log(`Erro ao atualizar tarefa: ${error.message}`));
             }, { onlyOnce: true });
         }
 
         function toggleSubtask(parentKey, path, subtaskIndex) {
-            console.log("toggleSubtask chamado com:", { parentKey, path, subtaskIndex });
+            log(`toggleSubtask chamado: parentKey=${parentKey}, path=${path}, subtaskIndex=${subtaskIndex}`);
             const taskRef = ref(db, `tasks/${parentKey}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
-                console.log("Estado atual da tarefa", parentKey, ":", task);
                 let current = task;
                 const parts = path.split('/').filter(p => p !== '');
                 for (let i = 0; i < parts.length; i++) {
@@ -429,19 +432,18 @@
                 }
                 const currentCompleted = current.subtasks[subtaskIndex].completed;
                 const newCompletedState = !currentCompleted;
-                console.log(`Subtarefa ${parentKey}/${path}/${subtaskIndex} - Estado atual: ${currentCompleted}, Novo estado: ${newCompletedState}`);
                 current.subtasks[subtaskIndex].completed = newCompletedState;
                 update(taskRef, task)
-                    .then(() => console.log(`Atualização no Firebase concluída para ${parentKey}`))
-                    .catch(error => console.error("Erro ao atualizar subtarefa:", error));
+                    .then(() => log(`Atualização no Firebase concluída para ${parentKey}`))
+                    .catch(error => log(`Erro ao atualizar subtarefa: ${error.message}`));
             }, { onlyOnce: true });
         }
 
         function deleteTask(key) {
             if (confirm("Tem certeza que deseja excluir esta tarefa?")) {
                 remove(ref(db, `tasks/${key}`))
-                    .then(() => console.log("Tarefa excluída com sucesso:", key))
-                    .catch(error => console.error("Erro ao excluir tarefa:", error));
+                    .then(() => log(`Tarefa excluída com sucesso: ${key}`))
+                    .catch(error => log(`Erro ao excluir tarefa: ${error.message}`));
             }
         }
 
@@ -453,8 +455,8 @@
                     const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
                     subtasks.splice(index, 1);
                     update(taskRef, task)
-                        .then(() => console.log("Subtarefa excluída com sucesso:", `${parentKey}/${path}/${index}`))
-                        .catch(error => console.error("Erro ao excluir subtarefa:", error));
+                        .then(() => log(`Subtarefa excluída com sucesso: ${parentKey}/${path}/${index}`))
+                        .catch(error => log(`Erro ao excluir subtarefa: ${error.message}`));
                 }, { onlyOnce: true });
             }
         }
@@ -467,8 +469,8 @@
         function updateNotes(key, textarea) {
             const taskRef = ref(db, `tasks/${key}`);
             update(taskRef, { notes: textarea.value })
-                .then(() => console.log("Notas atualizadas para tarefa:", key))
-                .catch(error => console.error("Erro ao atualizar notas:", error));
+                .then(() => log(`Notas atualizadas para tarefa: ${key}`))
+                .catch(error => log(`Erro ao atualizar notas: ${error.message}`));
         }
 
         function updateSubtaskNotes(parentKey, path, index, textarea) {
@@ -478,8 +480,8 @@
                 const subtasks = path ? getNestedSubtasks(task, path) : task.subtasks;
                 subtasks[index].notes = textarea.value;
                 update(taskRef, task)
-                    .then(() => console.log("Notas da subtarefa atualizadas:", `${parentKey}/${path}/${index}`))
-                    .catch(error => console.error("Erro ao atualizar notas da subtarefa:", error));
+                    .then(() => log(`Notas da subtarefa atualizadas: ${parentKey}/${path}/${index}`))
+                    .catch(error => log(`Erro ao atualizar notas da subtarefa: ${error.message}`));
             }, { onlyOnce: true });
         }
 
@@ -506,8 +508,8 @@
         function changeCategory(key, newCategory) {
             const taskRef = ref(db, `tasks/${key}`);
             update(taskRef, { category: newCategory })
-                .then(() => console.log(`Categoria da tarefa ${key} alterada para ${newCategory}`))
-                .catch(error => console.error("Erro ao alterar categoria:", error));
+                .then(() => log(`Categoria da tarefa ${key} alterada para ${newCategory}`))
+                .catch(error => log(`Erro ao alterar categoria: ${error.message}`));
         }
 
         function formatDate(date) {
@@ -598,7 +600,7 @@
         }
 
         function renderSubtasks(key, task, container, path = '', level = 1) {
-            console.log(`Renderizando subtarefas para key: ${key}, path: ${path}, level: ${level}, subtasks:`, task.subtasks);
+            log(`Renderizando subtarefas: key=${key}, path=${path}, level=${level}`);
             if (!task.subtasks || task.subtasks.length === 0 || level > 4) return;
 
             container.innerHTML = ''; // Limpar o container
@@ -685,7 +687,7 @@
                 checkbox.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const id = checkbox.getAttribute('data-id');
-                    console.log(`Checkbox clicado: ID=${id}, Nível=${id.split('/').length - 2}`);
+                    log(`Checkbox clicado: ID=${id}, Nível=${id.split('/').length - 2}`);
                     const parts = id.split('/').filter(p => p !== '');
                     const key = parts[0];
                     const path = parts.slice(1, -1).join('/');
@@ -798,7 +800,7 @@
                     checkbox.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const id = checkbox.getAttribute('data-id');
-                        console.log(`Checkbox clicado: ID=${id}, Nível=0`);
+                        log(`Checkbox clicado: ID=${id}, Nível=0`);
                         toggleTask(id);
                     });
                 });
@@ -826,7 +828,7 @@
         document.getElementById('taskInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                console.log("Enter pressionado com key:", editingSubtask ? editingSubtask.parentKey : (addingSubtaskToKey ? addingSubtaskToKey.key : editingTaskKey));
+                log("Enter pressionado");
                 saveTask(editingSubtask ? editingSubtask.parentKey : (addingSubtaskToKey ? addingSubtaskToKey.key : editingTaskKey));
             }
         });

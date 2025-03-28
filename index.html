@@ -129,8 +129,8 @@
         async function scrollToTarget(key, path = '') {
             log(`Iniciando scrollToTarget para key=${key}, path=${path}`);
 
-            // Aguardar atualização do Firebase e renderização
-            await wait(500);
+            // Aguardar atualização do Firebase e renderização (aumentado para 1000ms)
+            await wait(1000);
 
             // Função para encontrar e expandir o elemento
             const expandAndFindElement = async () => {
@@ -153,12 +153,17 @@
                     const subtasksContainer = currentElement.querySelector('.subtasks-container');
                     const expandBtn = currentElement.querySelector('.expand-btn');
 
-                    if (subtasksContainer && expandBtn && !subtasksContainer.classList.contains('visible')) {
-                        subtasksContainer.classList.add('visible');
-                        expandBtn.textContent = '−';
-                        updateExpansionState(key, currentPath, true); // Persistir expansão
-                        log(`Expandido: ${currentPath}`);
-                        await wait(100); // Pequeno atraso para animação
+                    if (subtasksContainer && expandBtn) {
+                        if (!subtasksContainer.classList.contains('visible')) {
+                            subtasksContainer.classList.add('visible');
+                            expandBtn.textContent = '−';
+                            updateExpansionState(key, currentPath, true); // Persistir expansão
+                            log(`Expandido: ${currentPath}`);
+                            await wait(200); // Atraso maior para cada nível
+                        }
+                    } else {
+                        log(`Erro: Container ou botão de expansão não encontrado em ${currentPath}`);
+                        return rootElement; // Fallback para a raiz
                     }
 
                     currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${part}"]`);
@@ -263,7 +268,7 @@
                         notes: subtasks[index].notes || "",
                         completed: subtasks[index].completed || false,
                         subtasks: subtasks[index].subtasks || [],
-                        expanded: subtasks[index].expanded || false // Preserva o estado de expansão
+                        expanded: subtasks[index].expanded || false
                     };
                     log(`Subtarefa atualizada: ${JSON.stringify(subtasks[index])}`);
                     update(taskRef, task).then(() => {
@@ -298,7 +303,7 @@
                         notes: "",
                         completed: false,
                         subtasks: [],
-                        expanded: false // Novo campo para subtarefas
+                        expanded: false
                     };
 
                     let newIndex;
@@ -346,7 +351,7 @@
                         completed: currentTask.completed || false,
                         category: currentCategory,
                         subtasks: currentTask.subtasks || [],
-                        expanded: currentTask.expanded || false // Preserva o estado de expansão
+                        expanded: currentTask.expanded || false
                     };
                     set(taskRef, updatedTask).then(() => {
                         document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
@@ -367,7 +372,7 @@
                     completed: false,
                     category: currentCategory,
                     subtasks: [],
-                    expanded: false // Novo campo para tarefas
+                    expanded: false
                 }).then((newTaskRef) => {
                     document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
                     scrollToTarget(newTaskRef.key);
@@ -526,7 +531,7 @@
                 subtasksContainer.classList.remove('visible');
                 expandBtn.textContent = '+';
             }
-            updateExpansionState(key, fullPath, isExpanded); // Persistir o estado
+            updateExpansionState(key, fullPath, isExpanded);
         }
 
         function changeCategory(key, newCategory) {
@@ -646,7 +651,7 @@
                 const fullPath = `${key}/${subPath}`;
                 const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
                 const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
-                const isExpanded = subtask.expanded || false; // Usar o estado persistido
+                const isExpanded = subtask.expanded || false;
 
                 subLi.innerHTML = `
                     <div class="task-row">
@@ -742,7 +747,7 @@
                     li.className = task.completed ? 'completed' : '';
                     const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
                     const hasSubtasks = task.subtasks && task.subtasks.length > 0;
-                    const isExpanded = task.expanded || false; // Usar o estado persistido
+                    const isExpanded = task.expanded || false;
 
                     li.innerHTML = `
                         <div class="task-row">

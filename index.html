@@ -40,6 +40,8 @@
         .task-row input[type="checkbox"] { width: 18px; height: 18px; margin: 0 10px 0 0; flex-shrink: 0; }
         .subtasks-container { display: none; }
         .subtasks-container.visible { display: block; }
+        .input-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        #txtNote { display: none; margin: 10px 0; padding: 10px; background: #333; border-radius: 5px; width: 100%; min-height: 100px; resize: vertical; }
     </style>
 </head>
 <body>
@@ -53,10 +55,14 @@
             <button id="allBtn">Todos</button>
         </div>
     </div>
-    <input type="text" id="taskInput" placeholder="Digite uma tarefa ou subtarefa">
-    <input type="date" id="dueDate" placeholder="Data de término (opcional)">
-    <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
-    <button id="actionButton">Adicionar</button>
+    <div class="input-row">
+        <input type="text" id="taskInput" placeholder="Digite uma tarefa ou subtarefa">
+        <input type="date" id="dueDate" placeholder="Data de término (opcional)">
+        <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
+        <button id="actionButton">Adicionar</button>
+        <button id="txtBtn">TXT</button>
+    </div>
+    <textarea id="txtNote" placeholder="Conteúdo das tarefas será exibido aqui ao clicar em TXT"></textarea>
     <div id="error"></div>
     <div id="success"></div>
     <ul id="taskList"></ul>
@@ -847,6 +853,39 @@
             });
         }
 
+// Função para gerar o conteúdo do campo de notas TXT
+function generateTxtNote() {
+    const taskList = document.getElementById('taskList');
+    const txtNote = document.getElementById('txtNote');
+    let content = '';
+
+    const items = taskList.querySelectorAll('li');
+    if (items.length === 0) {
+        content = 'Sem tarefas exibidas.';
+    } else {
+        items.forEach(item => {
+            // Verifica se o item está completado (tachado)
+            const isCompleted = item.classList.contains('completed');
+            if (isCompleted) {
+                // Se a tarefa ou subtarefa está completada, ignora ela e suas subtarefas
+                return;
+            }
+
+            const level = item.className.includes('subtask-level-') ? parseInt(item.className.match(/subtask-level-(\d)/)?.[1] || 0) : 0;
+            const indent = '    '.repeat(level); // 4 espaços por nível
+            const taskText = item.querySelector('.task-text').textContent;
+            const notes = item.querySelector('.notes textarea')?.value.trim();
+
+            content += `${indent}${taskText}\n`;
+            if (notes) {
+                content += `${indent}    Notas: ${notes}\n`;
+            }
+        });
+    }
+
+    txtNote.value = content || 'Nenhuma tarefa ou subtarefa não completada visível.';
+    txtNote.style.display = 'block';
+}
         setCategory('mainProjects');
         document.getElementById('mainProjectsBtn').addEventListener('click', () => setCategory('mainProjects'));
         document.getElementById('proposedBtn').addEventListener('click', () => setCategory('proposed'));
@@ -854,6 +893,7 @@
         document.getElementById('futureBtn').addEventListener('click', () => setCategory('future'));
         document.getElementById('allBtn').addEventListener('click', () => setCategory('all'));
         document.getElementById('actionButton').addEventListener('click', () => saveTask(editingSubtask ? editingSubtask.parentKey : (addingSubtaskToKey ? addingSubtaskToKey.key : editingTaskKey)));
+        document.getElementById('txtBtn').addEventListener('click', generateTxtNote);
         document.getElementById('taskInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();

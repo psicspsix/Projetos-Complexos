@@ -42,6 +42,8 @@
         .subtasks-container.visible { display: block; }
         .input-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         #txtNote { display: none; margin: 10px 0; padding: 10px; background: #333; border-radius: 5px; width: 100%; min-height: 100px; resize: vertical; }
+        .level-btn { font-size: 14px; padding: 5px; width: 20px; height: 20px; line-height: 10px; text-align: center; cursor: pointer; }
+        .level-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -91,25 +93,22 @@
         let currentCategory = 'mainProjects';
         let targetTaskKey = null;
 
-        // Função de log simples
         function log(message) {
             console.log(`[LOG ${new Date().toLocaleTimeString()}]: ${message}`);
         }
 
         log("Firebase conectado com sucesso!");
 
-        // Função auxiliar para atraso
         function wait(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
-        // Rolagem suave manual para o input
         function scrollToInput() {
             const taskInput = document.getElementById('taskInput');
             const targetPosition = taskInput.getBoundingClientRect().top + window.pageYOffset - 20;
             const startPosition = window.pageYOffset;
             const distance = targetPosition - startPosition;
-            const duration = 1000; // 1 segundo
+            const duration = 1000;
             let startTime = null;
 
             log(`Iniciando rolagem para o input: posição calculada=${targetPosition}, posição atual=${startPosition}`);
@@ -118,7 +117,7 @@
                 if (!startTime) startTime = currentTime;
                 const elapsed = currentTime - startTime;
                 const progress = Math.min(elapsed / duration, 1);
-                const ease = progress * (2 - progress); // Ease-in-out
+                const ease = progress * (2 - progress);
                 window.scrollTo(0, startPosition + distance * ease);
 
                 if (progress < 1) {
@@ -131,14 +130,10 @@
             requestAnimationFrame(animateScroll);
         }
 
-        // Expandir todos os níveis até o elemento alvo e rolar suavemente
         async function scrollToTarget(key, path = '') {
             log(`Iniciando scrollToTarget para key=${key}, path=${path}`);
-
-            // Aguardar atualização do Firebase e renderização (aumentado para 1000ms)
             await wait(1000);
 
-            // Função para encontrar e expandir o elemento
             const expandAndFindElement = async () => {
                 const rootElement = document.querySelector(`li[data-key="${key}"]`);
                 if (!rootElement) {
@@ -147,9 +142,7 @@
                 }
                 log(`Elemento raiz encontrado: key=${key}`);
 
-                if (!path) {
-                    return rootElement;
-                }
+                if (!path) return rootElement;
 
                 const parts = path.split('/').filter(p => p !== '');
                 let currentElement = rootElement;
@@ -163,19 +156,19 @@
                         if (!subtasksContainer.classList.contains('visible')) {
                             subtasksContainer.classList.add('visible');
                             expandBtn.textContent = '−';
-                            updateExpansionState(key, currentPath, true); // Persistir expansão
+                            updateExpansionState(key, currentPath, true);
                             log(`Expandido: ${currentPath}`);
-                            await wait(200); // Atraso maior para cada nível
+                            await wait(200);
                         }
                     } else {
                         log(`Erro: Container ou botão de expansão não encontrado em ${currentPath}`);
-                        return rootElement; // Fallback para a raiz
+                        return rootElement;
                     }
 
                     currentElement = subtasksContainer.querySelector(`li[data-subtask-index="${part}"]`);
                     if (!currentElement) {
                         log(`Erro: Subtarefa não encontrada no path=${currentPath}/${part}`);
-                        return rootElement; // Fallback para a raiz
+                        return rootElement;
                     }
                     currentPath += `/${part}`;
                 }
@@ -186,15 +179,9 @@
             const targetElement = await expandAndFindElement();
             if (targetElement) {
                 const rect = targetElement.getBoundingClientRect();
-                const scrollPosition = rect.top + window.pageYOffset - 50; // Offset para visibilidade
+                const scrollPosition = rect.top + window.pageYOffset - 50;
                 log(`Calculando rolagem: top=${rect.top}, pageYOffset=${window.pageYOffset}, scrollPosition=${scrollPosition}`);
-
-                window.scrollTo({
-                    top: scrollPosition,
-                    behavior: 'smooth'
-                });
-
-                // Aguardar a rolagem terminar
+                window.scrollTo({ top: scrollPosition, behavior: 'smooth' });
                 await wait(1000);
                 log(`Rolagem concluída para ${path ? `subtarefa em ${key}/${path}` : `tarefa em ${key}`}`);
             } else {
@@ -202,7 +189,6 @@
             }
         }
 
-        // Função para atualizar o estado de expansão no Firebase
         function updateExpansionState(key, path, isExpanded) {
             const taskRef = ref(db, `tasks/${key}`);
             onValue(taskRef, (snapshot) => {
@@ -210,7 +196,7 @@
                 if (!path) {
                     task.expanded = isExpanded;
                 } else {
-                    const parts = path.split('/').filter(p => p !== '').slice(1); // Remove a chave raiz
+                    const parts = path.split('/').filter(p => p !== '').slice(1);
                     let current = task;
                     for (const index of parts) {
                         current = current.subtasks[parseInt(index)];
@@ -547,6 +533,159 @@
                 .catch(error => log(`Erro ao alterar categoria: ${error.message}`));
         }
 
+        function moveLevelUp(key, path = '') {
+            log(`moveLevelUp chamado: key=${key}, path=${path}`);
+            const taskRef = ref(db, `tasks/${key}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                if (!task) {
+                    log(`Erro: Tarefa ${key} não encontrada`);
+                    return;
+                }
+                const parts = path.split('/').filter(p => p !== '');
+                const level = parts.length;
+
+                if (level === 0) {
+                    log(`Tarefa principal ${key} não pode subir mais (nível 0)`);
+                    return;
+                }
+
+                const subtaskIndex = parseInt(parts[parts.length - 1]);
+                let currentSubtasks = level === 1 ? task.subtasks : getNestedSubtasks(task, parts.slice(0, -1).join('/'));
+                
+                if (!currentSubtasks || !Array.isArray(currentSubtasks) || subtaskIndex >= currentSubtasks.length) {
+                    log(`Erro: Subtarefas inválidas ou índice fora do intervalo em ${key}/${path}`);
+                    return;
+                }
+
+                const subtaskToMove = currentSubtasks[subtaskIndex];
+
+                if (level === 1) {
+                    currentSubtasks.splice(subtaskIndex, 1);
+                    push(tasksRef, { ...subtaskToMove, category: task.category })
+                        .then((newTaskRef) => {
+                            log(`Subtarefa ${key}/${path} promovida a tarefa principal com key ${newTaskRef.key}`);
+                            update(taskRef, task);
+                            scrollToTarget(newTaskRef.key);
+                        })
+                        .catch(error => log(`Erro ao promover subtarefa: ${error.message}`));
+                } else {
+                    const parentPath = parts.slice(0, -2).join('/');
+                    const parentSubtasks = parentPath ? getNestedSubtasks(task, parentPath) : task.subtasks;
+                    
+                    if (!parentSubtasks || !Array.isArray(parentSubtasks)) {
+                        log(`Erro: ParentSubtasks inválido em ${key}/${parentPath}`);
+                        return;
+                    }
+
+                    currentSubtasks.splice(subtaskIndex, 1);
+                    parentSubtasks.push(subtaskToMove);
+                    update(taskRef, task)
+                        .then(() => {
+                            log(`Subtarefa ${key}/${path} subiu de nível ${level} para ${level - 1}`);
+                            const newPath = parentPath ? `${parentPath}/${parentSubtasks.length - 1}` : `${parentSubtasks.length - 1}`;
+                            scrollToTarget(key, newPath);
+                        })
+                        .catch(error => log(`Erro ao subir nível: ${error.message}`));
+                }
+            }, { onlyOnce: true });
+        }
+
+        function moveLevelDown(key, path = '') {
+            log(`moveLevelDown chamado: key=${key}, path=${path}`);
+            const taskRef = ref(db, `tasks/${key}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                if (!task) {
+                    log(`Erro: Tarefa ${key} não encontrada`);
+                    return;
+                }
+                const parts = path.split('/').filter(p => p !== '');
+                const level = parts.length;
+
+                if (level === 0) {
+                    onValue(tasksRef, (tasksSnapshot) => {
+                        const allTasks = tasksSnapshot.val();
+                        if (!allTasks) {
+                            log(`Erro: Nenhuma tarefa encontrada no banco de dados`);
+                            return;
+                        }
+                        const taskArray = Object.entries(allTasks)
+                            .filter(([_, t]) => currentCategory === 'all' || t.category === currentCategory)
+                            .sort((a, b) => {
+                                if (a[1].completed !== b[1].completed) return a[1].completed - b[1].completed;
+                                const dateA = a[1].dueDate || '9999-12-31';
+                                const dateB = b[1].dueDate || '9999-12-31';
+                                if (dateA !== dateB) return dateA.localeCompare(dateB);
+                                return b[1].priority - a[1].priority;
+                            });
+                        const taskIndex = taskArray.findIndex(([k]) => k === key);
+                        if (taskArray.length === 1) {
+                            log(`Tarefa ${key} é a única, botão deve estar desabilitado`);
+                            return;
+                        }
+                        let targetKey, newIndex;
+                        if (taskIndex > 0) {
+                            targetKey = taskArray[taskIndex - 1][0];
+                            log(`Tarefa ${key} será subordinada à tarefa acima: ${targetKey}`);
+                        } else {
+                            targetKey = taskArray[taskIndex + 1][0];
+                            log(`Tarefa ${key} é a primeira, será subordinada à tarefa abaixo: ${targetKey}`);
+                        }
+                        const targetRef = ref(db, `tasks/${targetKey}`);
+                        onValue(targetRef, (targetSnapshot) => {
+                            const targetTask = targetSnapshot.val();
+                            targetTask.subtasks = targetTask.subtasks || [];
+                            newIndex = targetTask.subtasks.length;
+                            targetTask.subtasks.push({ ...task });
+                            update(targetRef, targetTask)
+                                .then(() => {
+                                    remove(taskRef);
+                                    log(`Tarefa ${key} desceu para subtarefa de ${targetKey} no índice ${newIndex}`);
+                                    scrollToTarget(targetKey, `${newIndex}`);
+                                })
+                                .catch(error => log(`Erro ao descer tarefa: ${error.message}`));
+                        }, { onlyOnce: true });
+                    }, { onlyOnce: true });
+                } else {
+                    const parentSubtasks = level === 1 ? task.subtasks : getNestedSubtasks(task, parts.slice(0, -1).join('/'));
+                    const subtaskIndex = parseInt(parts[parts.length - 1]);
+
+                    if (!parentSubtasks || !Array.isArray(parentSubtasks) || subtaskIndex >= parentSubtasks.length) {
+                        log(`Erro: Subtarefas inválidas ou índice fora do intervalo em ${key}/${path}`);
+                        return;
+                    }
+
+                    if (parentSubtasks.length === 1) {
+                        log(`Subtarefa ${key}/${path} é a única no nível ${level}, botão deve estar desabilitado`);
+                        return;
+                    }
+
+                    const subtaskToMove = parentSubtasks[subtaskIndex];
+                    let targetIndex;
+                    if (subtaskIndex > 0) {
+                        targetIndex = subtaskIndex - 1;
+                        log(`Subtarefa ${key}/${path} será subordinada à subtarefa acima: índice ${targetIndex}`);
+                    } else {
+                        targetIndex = subtaskIndex + 1;
+                        log(`Subtarefa ${key}/${path} é a primeira, será subordinada à subtarefa abaixo: índice ${targetIndex}`);
+                    }
+
+                    parentSubtasks[targetIndex].subtasks = parentSubtasks[targetIndex].subtasks || [];
+                    const newIndex = parentSubtasks[targetIndex].subtasks.length;
+                    parentSubtasks[targetIndex].subtasks.push(subtaskToMove);
+                    parentSubtasks.splice(subtaskIndex, 1);
+                    update(taskRef, task)
+                        .then(() => {
+                            log(`Subtarefa ${key}/${path} desceu de nível ${level} para ${level + 1}`);
+                            const newPath = `${parts.slice(0, -1).join('/')}/${targetIndex}/${newIndex}`;
+                            scrollToTarget(key, newPath);
+                        })
+                        .catch(error => log(`Erro ao descer nível: ${error.message}`));
+                }
+            }, { onlyOnce: true });
+        }
+
         function formatDate(date) {
             if (!date) return 'Sem data';
             const [year, month, day] = date.split('-');
@@ -560,35 +699,6 @@
             const due = new Date(dueDate);
             due.setHours(0, 0, 0, 0);
             return due < today;
-        }
-
-        function isToday(dueDate) {
-            if (!dueDate) return false;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const due = new Date(dueDate);
-            due.setHours(0, 0, 0, 0);
-            return due.getTime() === today.getTime();
-        }
-
-        function isOneDayPast(dueDate) {
-            if (!dueDate) return false;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const due = new Date(dueDate);
-            due.setHours(0, 0, 0, 0);
-            const diff = (today - due) / (1000 * 60 * 60 * 24);
-            return diff === 1;
-        }
-
-        function isTwoOrMoreDaysPast(dueDate) {
-            if (!dueDate) return false;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const due = new Date(dueDate);
-            due.setHours(0, 0, 0, 0);
-            const diff = (today - due) / (1000 * 60 * 60 * 24);
-            return diff >= 2;
         }
 
         function setCategory(category) {
@@ -609,20 +719,18 @@
             return earliest;
         }
 
-        function shouldExpandTask(task) {
-            if (task.subtasks) {
-                return task.subtasks.some(subtask => isPastDue(subtask.dueDate, subtask.completed) || shouldExpandTask(subtask));
-            }
-            return false;
-        }
-
         function getNestedSubtasks(task, path) {
+            if (!path) return task.subtasks || [];
             const parts = path.split('/').filter(p => p !== '');
             let current = task;
             for (const index of parts) {
+                if (!current.subtasks || !Array.isArray(current.subtasks) || parseInt(index) >= current.subtasks.length) {
+                    log(`Erro: Caminho inválido em getNestedSubtasks para path=${path}`);
+                    return [];
+                }
                 current = current.subtasks[parseInt(index)];
             }
-            return current.subtasks;
+            return current.subtasks || [];
         }
 
         function getParentTask(task, path) {
@@ -636,9 +744,9 @@
 
         function renderSubtasks(key, task, container, path = '', level = 1) {
             log(`Renderizando subtarefas: key=${key}, path=${path}, level=${level}`);
-            if (!task.subtasks || task.subtasks.length === 0 || level > 4) return;
+            if (!task.subtasks || task.subtasks.length === 0) return;
 
-            container.innerHTML = ''; // Limpar o container
+            container.innerHTML = '';
 
             const sortedSubtasks = task.subtasks.map((subtask, originalIndex) => ({ subtask, originalIndex }))
                 .sort((a, b) => {
@@ -658,12 +766,24 @@
                 const isSubtaskBoldItalic = isPastDue(subtask.dueDate, subtask.completed);
                 const hasSubtasks = subtask.subtasks && subtask.subtasks.length > 0;
                 const isExpanded = subtask.expanded || false;
+                const isOnlySubtask = task.subtasks.length === 1;
 
                 subLi.innerHTML = `
                     <div class="task-row">
                         ${hasSubtasks ? `<button class="expand-btn">${isExpanded ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
                         <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-id="${fullPath}">
                         <span class="task-text ${isSubtaskBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
+                        <button class="level-btn up-btn" data-id="${fullPath}">↑</button>
+                        <button class="level-btn down-btn" ${isOnlySubtask ? 'disabled' : ''} data-id="${fullPath}">↓</button>
+                        <div class="category-dropdown">
+                            <button class="category-btn">Categoria</button>
+                            <div class="dropdown-content">
+                                <button class="dropdown-item" data-category="mainProjects">Projetos Principais</button>
+                                <button class="dropdown-item" data-category="proposed">Proj. Propostos</button>
+                                <button class="dropdown-item" data-category="inProgress">Proj. em Andamento</button>
+                                <button class="dropdown-item" data-category="future">Proj. Futuros</button>
+                            </div>
+                        </div>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
                         ${level < 4 ? '<button class="subtask-btn">Subtarefa</button>' : ''}
@@ -691,6 +811,14 @@
                         toggleSubtasks(key, subPath, subLi);
                     });
                 }
+                subLi.querySelector('.up-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    moveLevelUp(key, subPath);
+                });
+                subLi.querySelector('.down-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    moveLevelDown(key, subPath);
+                });
                 subLi.querySelector('.edit-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
                     editSubtask(key, path, originalIndex);
@@ -747,6 +875,8 @@
                         return b[1].priority - a[1].priority;
                     });
 
+                const isSingleTask = taskArray.length === 1;
+
                 taskArray.forEach(([key, task]) => {
                     const li = document.createElement('li');
                     li.setAttribute('data-key', key);
@@ -760,6 +890,8 @@
                             ${hasSubtasks ? `<button class="expand-btn">${isExpanded ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
                             <input type="checkbox" ${task.completed ? 'checked' : ''} data-id="${key}">
                             <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                            <button class="level-btn up-btn" disabled data-id="${key}">↑</button>
+                            <button class="level-btn down-btn" ${isSingleTask ? 'disabled' : ''} data-id="${key}">↓</button>
                             <div class="category-dropdown">
                                 <button class="category-btn">Categoria</button>
                                 <div class="dropdown-content">
@@ -796,6 +928,14 @@
                             toggleSubtasks(key, '', li);
                         });
                     }
+                    li.querySelector('.up-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        moveLevelUp(key);
+                    });
+                    li.querySelector('.down-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        moveLevelDown(key);
+                    });
                     const categoryBtn = li.querySelector('.category-btn');
                     categoryBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -853,39 +993,35 @@
             });
         }
 
-// Função para gerar o conteúdo do campo de notas TXT
-function generateTxtNote() {
-    const taskList = document.getElementById('taskList');
-    const txtNote = document.getElementById('txtNote');
-    let content = '';
+        function generateTxtNote() {
+            const taskList = document.getElementById('taskList');
+            const txtNote = document.getElementById('txtNote');
+            let content = '';
 
-    const items = taskList.querySelectorAll('li');
-    if (items.length === 0) {
-        content = 'Sem tarefas exibidas.';
-    } else {
-        items.forEach(item => {
-            // Verifica se o item está completado (tachado)
-            const isCompleted = item.classList.contains('completed');
-            if (isCompleted) {
-                // Se a tarefa ou subtarefa está completada, ignora ela e suas subtarefas
-                return;
+            const items = taskList.querySelectorAll('li');
+            if (items.length === 0) {
+                content = 'Sem tarefas exibidas.';
+            } else {
+                items.forEach(item => {
+                    const isCompleted = item.classList.contains('completed');
+                    if (isCompleted) return;
+
+                    const level = item.className.includes('subtask-level-') ? parseInt(item.className.match(/subtask-level-(\d)/)?.[1] || 0) : 0;
+                    const indent = '    '.repeat(level);
+                    const taskText = item.querySelector('.task-text').textContent;
+                    const notes = item.querySelector('.notes textarea')?.value.trim();
+
+                    content += `${indent}${taskText}\n`;
+                    if (notes) {
+                        content += `${indent}    Notas: ${notes}\n`;
+                    }
+                });
             }
 
-            const level = item.className.includes('subtask-level-') ? parseInt(item.className.match(/subtask-level-(\d)/)?.[1] || 0) : 0;
-            const indent = '    '.repeat(level); // 4 espaços por nível
-            const taskText = item.querySelector('.task-text').textContent;
-            const notes = item.querySelector('.notes textarea')?.value.trim();
+            txtNote.value = content || 'Nenhuma tarefa ou subtarefa não completada visível.';
+            txtNote.style.display = 'block';
+        }
 
-            content += `${indent}${taskText}\n`;
-            if (notes) {
-                content += `${indent}    Notas: ${notes}\n`;
-            }
-        });
-    }
-
-    txtNote.value = content || 'Nenhuma tarefa ou subtarefa não completada visível.';
-    txtNote.style.display = 'block';
-}
         setCategory('mainProjects');
         document.getElementById('mainProjectsBtn').addEventListener('click', () => setCategory('mainProjects'));
         document.getElementById('proposedBtn').addEventListener('click', () => setCategory('proposed'));

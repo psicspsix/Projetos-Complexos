@@ -1007,7 +1007,7 @@
                             ${hasSubtasks ? `<button class="expand-btn">${isExpanded ? '−' : '+'}</button>` : '<span class="expand-placeholder"></span>'}
                             <input type="checkbox" ${subtask.completed ? 'checked' : ''} data-id="${key}/${subtaskPath}">
                             <span class="task-text ${isBoldItalic ? 'bold-italic' : ''}">${subtask.text} | Data: ${formatDate(subtask.dueDate)} | Prioridade: ${subtask.priority}</span>
-                            <button class="level-btn up-btn" ${level === 1 ? 'disabled' : ''} data-id="${key}/${subtaskPath}">↑</button>
+                            <button class="level-btn up-btn" data-id="${key}/${subtaskPath}">↑</button>
                             <button class="level-btn down-btn" data-id="${key}/${subtaskPath}">↓</button>
                             <button class="edit-btn">Editar</button>
                             <button class="delete-btn">Excluir</button>

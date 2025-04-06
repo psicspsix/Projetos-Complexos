@@ -57,7 +57,8 @@
             <button id="inProgressBtn">Proj. em Andamento</button>
             <button id="futureBtn">Proj. Futuros</button>
             <button id="allBtn">Todos</button>
-            <button id="shareBtn" class="small-btn">↻</button>
+            <button id="shareCategoryBtn" class="small-btn">⍟</button>
+            <button id="shareAllBtn" class="small-btn">★</button>
         </div>
     </div>
     <div class="input-row">
@@ -67,7 +68,7 @@
         <button id="actionButton">Adicionar</button>
         <button id="txtBtn">TXT</button>
         <button id="searchBtn" class="small-btn">🔍</button>
-        <button id="shareCategoryBtn" class="small-btn">⍟</button>
+        <button id="shareBtn" class="small-btn">↻</button>
         <button id="backBtn">Voltar</button>
     </div>
     <textarea id="txtNote" placeholder="Conteúdo das tarefas será exibido aqui ao clicar em TXT"></textarea>
@@ -1271,8 +1272,7 @@
                 set(newTaskRef, taskToShare)
                     .then(() => {
                         document.getElementById('success').textContent = "Tarefa compartilhada com sucesso!";
-                        log(`Tarefa "${taskInput}" compartilhada com sucesso com key ${newTaskRef.key}`);
-                        remove(ref(db, `tasks/${taskKeyToShare}`));
+                        log(`Tarefa "${taskInput}" copiada com sucesso para Projetos Compartilhados com key ${newTaskRef.key}`);
                         resetForm();
                     })
                     .catch(error => {
@@ -1283,6 +1283,11 @@
         }
 
         function shareCategoryTasks() {
+            if (!confirm("Tem certeza que deseja compartilhar todas as tarefas da categoria atual e removê-las do banco original?")) {
+                log("Compartilhamento de categoria cancelado pelo usuário");
+                return;
+            }
+
             log(`Iniciando compartilhamento de tarefas da categoria: ${currentCategory}`);
             onValue(tasksRef, (snapshot) => {
                 const tasks = snapshot.val();
@@ -1320,11 +1325,45 @@
             }, { onlyOnce: true });
         }
 
+        function shareAllTasks() {
+            if (!confirm("Tem certeza que deseja copiar todas as tarefas do banco para Projetos Compartilhados?")) {
+                log("Migração completa cancelada pelo usuário");
+                return;
+            }
+
+            log("Iniciando migração completa do banco de dados");
+            onValue(tasksRef, (snapshot) => {
+                const tasks = snapshot.val();
+                if (!tasks) {
+                    document.getElementById('error').textContent = "Nenhuma tarefa para copiar!";
+                    log("Erro: Nenhuma tarefa encontrada no banco");
+                    return;
+                }
+
+                const tasksToCopy = Object.values(tasks);
+                const promises = tasksToCopy.map(task => {
+                    const newTaskRef = push(newTasksRef);
+                    return set(newTaskRef, task).then(() => newTaskRef.key);
+                });
+
+                Promise.all(promises)
+                    .then((newKeys) => {
+                        document.getElementById('success').textContent = `${tasksToCopy.length} tarefas copiadas com sucesso!`;
+                        log(`Migração completa realizada: ${tasksToCopy.length} tarefas copiadas para Projetos Compartilhados`);
+                    })
+                    .catch(error => {
+                        document.getElementById('error').textContent = "Erro ao copiar banco: " + error.message;
+                        log(`Erro ao copiar banco: ${error.message}`);
+                    });
+            }, { onlyOnce: true });
+        }
+
         document.getElementById('actionButton').addEventListener('click', () => saveTask());
         document.getElementById('txtBtn').addEventListener('click', exportToTxt);
         document.getElementById('searchBtn').addEventListener('click', searchTasks);
         document.getElementById('shareBtn').addEventListener('click', shareTask);
         document.getElementById('shareCategoryBtn').addEventListener('click', shareCategoryTasks);
+        document.getElementById('shareAllBtn').addEventListener('click', shareAllTasks);
         document.getElementById('mainProjectsBtn').addEventListener('click', () => setCategory('mainProjects'));
         document.getElementById('proposedBtn').addEventListener('click', () => setCategory('proposed'));
         document.getElementById('inProgressBtn').addEventListener('click', () => setCategory('inProgress'));
